@@ -5,7 +5,7 @@
       "destination": "https://salon-booking-backend-mv7p.onrender.com/api/$1"
     },
     {
-      "source": "/(.*)",
+      "source": "/[^.]+",
       "destination": "/index.html"
     }
   ]
