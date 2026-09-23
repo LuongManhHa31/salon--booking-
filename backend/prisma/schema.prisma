@@ -1,0 +1,182 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  CUSTOMER
+  STAFF
+  ADMIN
+}
+
+enum AppointmentStatus {
+  PENDING
+  CONFIRMED
+  COMPLETED
+  CANCELLED
+  NO_SHOW
+}
+
+enum BookingSource {
+  QUICK
+  ACCOUNT
+}
+
+enum PaymentMethod {
+  ONLINE
+  OFFLINE
+}
+
+enum PaymentStatus {
+  PENDING
+  PAID
+  FAILED
+}
+
+enum Gender {
+  MALE
+  FEMALE
+}
+
+enum NotificationChannel {
+  APP
+  EMAIL
+}
+
+model Account {
+  id           String   @id @default(cuid())
+  phone        String   @unique
+  email        String?  @unique
+  passwordHash String?
+  fullName     String
+  role         Role     @default(CUSTOMER)
+  isQuickProfile Boolean @default(false)
+  locked       Boolean  @default(false)
+  createdAt    DateTime @default(now())
+
+  staffProfile          StaffProfile?
+  appointmentsAsCustomer Appointment[] @relation("CustomerAppointments")
+  appointmentsAsStaff    Appointment[] @relation("StaffAppointments")
+  notifications          Notification[]
+}
+
+model StaffProfile {
+  id           String  @id @default(cuid())
+  accountId    String  @unique
+  account      Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  specialties  String?
+  active       Boolean @default(true)
+}
+
+model Service {
+  id              String   @id @default(cuid())
+  name            String
+  description     String?
+  price           Decimal  @db.Decimal(10, 2)
+  durationMinutes Int
+  isActive        Boolean  @default(true)
+  createdAt       DateTime @default(now())
+
+  appointmentServices AppointmentService[]
+}
+
+model Appointment {
+  id              String            @id @default(cuid())
+  customerId      String
+  customer        Account           @relation("CustomerAppointments", fields: [customerId], references: [id])
+  staffId         String?
+  staff           Account?          @relation("StaffAppointments", fields: [staffId], references: [id])
+  scheduledStart  DateTime
+  scheduledEnd    DateTime
+  status          AppointmentStatus @default(PENDING)
+  source          BookingSource     @default(ACCOUNT)
+  notes           String?
+  resultNotes     String?
+  cancelledAt     DateTime?
+  cancelReason    String?
+  reminderSentAt  DateTime?
+  createdAt       DateTime          @default(now())
+
+  services AppointmentService[]
+  review   Review?
+  payment  Payment?
+  notifications Notification[]
+
+  @@index([staffId, scheduledStart, scheduledEnd])
+  @@index([customerId])
+}
+
+model AppointmentService {
+  id                String      @id @default(cuid())
+  appointmentId     String
+  appointment       Appointment @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
+  serviceId         String
+  service           Service     @relation(fields: [serviceId], references: [id])
+  priceAtBooking    Decimal     @db.Decimal(10, 2)
+  durationAtBooking Int
+}
+
+model OtpCode {
+  id        String   @id @default(cuid())
+  phone     String
+  code      String
+  expiresAt DateTime
+  consumed  Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([phone, code])
+}
+
+model Review {
+  id            String      @id @default(cuid())
+  appointmentId String      @unique
+  appointment   Appointment @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
+  customerId    String
+  rating        Int
+  comment       String?
+  createdAt     DateTime    @default(now())
+
+  @@index([customerId])
+}
+
+model Payment {
+  id              String        @id @default(cuid())
+  appointmentId   String        @unique
+  appointment     Appointment   @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
+  method          PaymentMethod
+  status          PaymentStatus @default(PENDING)
+  amount          Decimal       @db.Decimal(10, 2)
+  transactionRef  String?
+  paidAt          DateTime?
+  createdAt       DateTime      @default(now())
+}
+
+model Hairstyle {
+  id          String   @id @default(cuid())
+  name        String
+  gender      Gender
+  faceShapes  String[]
+  colorTag    String?
+  imageUrl    String?
+  description String?
+  createdAt   DateTime @default(now())
+}
+
+model Notification {
+  id            String              @id @default(cuid())
+  accountId     String
+  account       Account             @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  appointmentId String?
+  appointment   Appointment?        @relation(fields: [appointmentId], references: [id], onDelete: SetNull)
+  channel       NotificationChannel @default(APP)
+  title         String
+  body          String
+  readAt        DateTime?
+  createdAt     DateTime            @default(now())
+
+  @@index([accountId])
+}
