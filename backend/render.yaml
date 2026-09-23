@@ -2,6 +2,7 @@ services:
   - type: web
     name: salon-booking-backend
     env: node
+    plan: free
     buildCommand: npm install && npm run build && npx prisma generate && npx prisma migrate deploy
     startCommand: npm start
     envVars:
@@ -18,5 +19,6 @@ services:
 
 databases:
   - name: salon-db
+    plan: free
     databaseName: salon
     user: salon_user
