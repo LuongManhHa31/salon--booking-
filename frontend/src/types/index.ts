@@ -88,6 +88,7 @@ export interface Hairstyle {
   faceShapes: FaceShape[];
   colorTag?: string | null;
   description?: string | null;
+  imageUrl?: string | null;
 }
 
 export interface NotificationItem {
