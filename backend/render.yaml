@@ -3,6 +3,7 @@ services:
     name: salon-booking-backend
     env: node
     plan: free
+    rootDir: backend
     buildCommand: npm install && npm run build && npx prisma generate && npx prisma migrate deploy
     startCommand: npm start
     envVars:
