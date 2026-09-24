@@ -1,6 +1,6 @@
 import { GoogleGenAI } from "@google/genai";
 
-export const GEMINI_CHAT_MODEL = "gemini-3.7-flash";
+export const GEMINI_CHAT_MODEL = "gemini-3.5-flash";
 
 // GEMINI_API_KEY có thể chứa nhiều key cách nhau bằng dấu phẩy (mỗi key từ một tài khoản Google
 // khác nhau có quota free-tier riêng). Khi một key bị lỗi hết quota, withGemini() tự động thử
