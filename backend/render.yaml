@@ -15,8 +15,7 @@ services:
         value: production
       - key: JWT_SECRET
         generateValue: true
-      - key: GEMINI_API_KEY
-        value: "dien_key_cua_ban_khi_cai_dat_render"
+
 
 databases:
   - name: salon-db
