@@ -73,7 +73,7 @@ export function AdminAppointmentsPage() {
               <p className="text-lg font-bold text-gray-900">{formatDateTime(a.scheduledStart)}</p>
               <p className="text-base text-gray-700 mt-1">{a.services.map((s) => s.service.name).join(", ")}</p>
               {a.customer && <p className="text-base font-medium text-gray-800 mt-1">Khách hàng: {a.customer.fullName} - {a.customer.phone}</p>}
-              <p className="text-base text-blue-600 font-semibold mt-1">Trạng thái: {statusLabel[a.status]}</p>
+              <p className={`text-base font-semibold mt-1 ${a.status === 'CONFIRMED' ? 'text-green-600' : a.status === 'PENDING' ? 'text-yellow-600' : 'text-blue-600'}`}>Trạng thái: {statusLabel[a.status]}</p>
             </div>
             <div className="flex gap-3">
               <select

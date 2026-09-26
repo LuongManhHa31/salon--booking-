@@ -264,7 +264,7 @@ router.get("/", requireAuth, requireRole("ADMIN"), async (req, res) => {
         : {}),
     },
     include: { services: { include: { service: true } }, staff: true, customer: true, payment: true },
-    orderBy: { scheduledStart: "asc" },
+    orderBy: { createdAt: "desc" },
   });
   res.json({ appointments });
 });
