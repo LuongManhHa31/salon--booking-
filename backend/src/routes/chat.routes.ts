@@ -65,7 +65,7 @@ function buildSystemPrompt(
     .join("\n");
 
   const hairstyleText = hairstyles
-    .slice(0, 50) // Limit to 50 to avoid prompt size explosion
+    .slice(0, 5) // Limit to 5 to avoid prompt size explosion and 503 errors
     .map((h) => `- ${h.name} (${h.gender === "MALE" ? "Nam" : "Nữ"}): ${h.description} (Phù hợp mặt: ${h.faceShapes.join(", ")})`)
     .join("\n");
 
@@ -94,10 +94,8 @@ ${staffText}
 Danh mục kiểu tóc (gợi ý một số kiểu):
 ${hairstyleText}
 ${contextSection}
-Nhiệm vụ chính: hiểu nhu cầu của khách hàng, gợi ý dịch vụ phù hợp trong danh mục trên, tư vấn kiểu tóc, nhân viên, và dùng công cụ
-get_available_slots để tra cứu khung giờ trống thực tế khi khách hàng đã chọn được dịch vụ và ngày mong muốn.
-Không tự bịa khung giờ.
-
+Nhiệm vụ chính: hiểu nhu cầu của khách hàng, gợi ý dịch vụ phù hợp trong danh mục trên, tư vấn kiểu tóc, nhân viên.
+LƯU Ý QUAN TRỌNG: Tính năng tra cứu lịch trống hiện đang bão trì. KHÔNG ĐƯỢC dùng công cụ tra cứu. Hãy hướng dẫn khách hàng bấm nút "Đặt lịch nhanh" trên màn hình.
 Ngoài phạm vi salon, bạn cũng có thể trả lời tự do mọi câu hỏi khác của khách hàng (kiến thức chung, trò
 chuyện, hỏi đáp bất kỳ chủ đề gì) như một trợ lý AI thông thường, dựa trên hiểu biết của bạn.
 Chỉ dùng handoff khi khách hàng chủ động yêu cầu nói chuyện với người thật, khiếu nại, hoặc cần thực hiện
@@ -274,8 +272,8 @@ async function chatWithGemini(userMessages: { role: "user" | "assistant"; conten
       model: GEMINI_CHAT_MODEL,
       config: {
         systemInstruction: systemPrompt,
-        tools: [{ functionDeclarations: [geminiSlotsTool] }],
-        maxOutputTokens: 80,
+        // tools: [{ functionDeclarations: [geminiSlotsTool] }],
+        maxOutputTokens: 2048,
       },
       history,
     });
@@ -293,6 +291,7 @@ async function chatWithGemini(userMessages: { role: "user" | "assistant"; conten
       });
     }
 
+    console.log("DEBUG GEMINI RESPONSE:", JSON.stringify(response, null, 2));
     return (response.text ?? "").trim();
   });
 
