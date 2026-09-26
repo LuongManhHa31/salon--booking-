@@ -234,7 +234,97 @@ export function HomePage() {
           ))}
         </div>
       </section>
-      
+      {/* ĐỘI NGŨ CHUYÊN GIA */}
+      <section className="bg-white py-12 mt-12 border-t border-gray-100">
+        <div className="max-w-6xl mx-auto px-4">
+          <div className="flex flex-col items-center mb-8 text-center">
+            <h2 className="text-2xl font-black text-blue-900 uppercase tracking-widest mb-2">Đội ngũ chuyên gia</h2>
+            <p className="text-gray-500 max-w-xl">Những bàn tay vàng tạo nên phong cách hoàn hảo cho bạn</p>
+          </div>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+            {[
+              { name: "Nguyễn Văn Thợ", role: "Master Stylist", exp: "5 năm kinh nghiệm", img: "/images/male1.jpg" },
+              { name: "Trần Thị Thợ", role: "Color Specialist", exp: "7 năm kinh nghiệm", img: "/images/female1.jpg" },
+              { name: "Thân Tuấn Vũ", role: "Creative Director", exp: "10 năm kinh nghiệm", img: "/images/male2.jpg" },
+              { name: "Dương Văn Tuấn", role: "Senior Stylist", exp: "4 năm kinh nghiệm", img: "/images/male3.jpg" }
+            ].map((staff, i) => (
+              <div key={i} className="flex flex-col items-center group cursor-pointer">
+                <div className="w-32 h-32 md:w-40 md:h-40 rounded-full overflow-hidden mb-4 border-4 border-gray-50 shadow-md group-hover:border-blue-100 transition-all duration-300 group-hover:-translate-y-2">
+                  <img src={staff.img} alt={staff.name} className="w-full h-full object-cover" />
+                </div>
+                <h3 className="font-bold text-gray-800 text-lg group-hover:text-blue-600 transition-colors">{staff.name}</h3>
+                <p className="text-sm font-semibold text-blue-600">{staff.role}</p>
+                <p className="text-xs text-gray-500 mt-1">{staff.exp}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* FOOTER */}
+      <footer className="bg-gray-900 text-gray-300 py-12 mt-auto">
+        <div className="max-w-6xl mx-auto px-4 grid grid-cols-1 md:grid-cols-4 gap-8">
+          <div>
+            <Link to="/" className="text-2xl font-black text-white tracking-tighter block mb-4">
+              SALON<span className="text-blue-500">AI</span>
+            </Link>
+            <p className="text-sm text-gray-400 mb-4 leading-relaxed">
+              Tiên phong ứng dụng công nghệ Trí tuệ Nhân tạo trong lĩnh vực làm đẹp, mang đến trải nghiệm đặt lịch và tư vấn cá nhân hóa tuyệt vời nhất.
+            </p>
+            <div className="flex gap-4">
+              <span className="w-8 h-8 rounded-full bg-gray-800 flex items-center justify-center cursor-pointer hover:bg-blue-600 transition-colors text-white text-xs">FB</span>
+              <span className="w-8 h-8 rounded-full bg-gray-800 flex items-center justify-center cursor-pointer hover:bg-blue-600 transition-colors text-white text-xs">IG</span>
+              <span className="w-8 h-8 rounded-full bg-gray-800 flex items-center justify-center cursor-pointer hover:bg-blue-600 transition-colors text-white text-xs">TT</span>
+            </div>
+          </div>
+          
+          <div>
+            <h4 className="text-white font-bold mb-4 uppercase text-sm tracking-wider">Dịch vụ</h4>
+            <ul className="space-y-2 text-sm">
+              <li><Link to="/services" className="hover:text-blue-400 transition-colors">Cắt tóc nam / nữ</Link></li>
+              <li><Link to="/services" className="hover:text-blue-400 transition-colors">Uốn / Duỗi / Nhuộm</Link></li>
+              <li><Link to="/services" className="hover:text-blue-400 transition-colors">Gội đầu dưỡng sinh</Link></li>
+              <li><Link to="/services" className="hover:text-blue-400 transition-colors">Phục hồi tóc hư tổn</Link></li>
+            </ul>
+          </div>
+
+          <div>
+            <h4 className="text-white font-bold mb-4 uppercase text-sm tracking-wider">Hỗ trợ khách hàng</h4>
+            <ul className="space-y-2 text-sm">
+              <li><a href="#" className="hover:text-blue-400 transition-colors">Tìm salon gần nhất</a></li>
+              <li><a href="#" className="hover:text-blue-400 transition-colors">Chính sách bảo hành</a></li>
+              <li><a href="#" className="hover:text-blue-400 transition-colors">Câu hỏi thường gặp</a></li>
+              <li><a href="#" className="hover:text-blue-400 transition-colors">Liên hệ góp ý</a></li>
+            </ul>
+          </div>
+
+          <div>
+            <h4 className="text-white font-bold mb-4 uppercase text-sm tracking-wider">Liên hệ</h4>
+            <ul className="space-y-3 text-sm">
+              <li className="flex items-start gap-3">
+                <span className="text-blue-500">📍</span>
+                <span>20 Hoàng Văn Thụ, Thái Nguyên, Việt Nam</span>
+              </li>
+              <li className="flex items-center gap-3">
+                <span className="text-blue-500">📞</span>
+                <span className="font-bold text-white">0345.607.361</span>
+              </li>
+              <li className="flex items-center gap-3">
+                <span className="text-blue-500">✉️</span>
+                <span>support@salonai.vn</span>
+              </li>
+            </ul>
+          </div>
+        </div>
+        
+        <div className="max-w-6xl mx-auto px-4 mt-12 pt-8 border-t border-gray-800 text-sm text-gray-500 flex flex-col md:flex-row justify-between items-center gap-4">
+          <p>© 2026 SalonAI Booking. Bản quyền thuộc về Luong Manh Ha.</p>
+          <div className="flex gap-4">
+            <a href="#" className="hover:text-white transition-colors">Điều khoản</a>
+            <a href="#" className="hover:text-white transition-colors">Bảo mật</a>
+          </div>
+        </div>
+      </footer>
     </div>
   );
 }
