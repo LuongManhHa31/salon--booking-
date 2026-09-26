@@ -147,7 +147,7 @@ export function HomePage() {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           {[
             { name: "Gội dưỡng sinh thư giãn", price: "80.000", img: "/images/female3.jpg" },
-            { name: "Lấy ráy tai êm", price: "50.000", img: "/images/female4.jpg" },
+            { name: "Lấy ráy tai êm", price: "50.000", img: "/images/lay-ray-tai.png" },
           ].map((s, i) => (
             <Link to="/services" key={i} className="bg-white rounded-xl overflow-hidden shadow-sm hover:shadow-md transition-shadow group border border-gray-100 block">
               <div className="h-48 overflow-hidden bg-gray-200">
