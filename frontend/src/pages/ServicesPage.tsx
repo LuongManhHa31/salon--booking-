@@ -21,6 +21,8 @@ function getServiceImage(name: string) {
     return "https://images.unsplash.com/photo-1562322140-8baeececf3df?w=600";
   if (lower.includes("gội") || lower.includes("massage")) 
     return "https://images.unsplash.com/photo-1512290923902-8a9f81dc236c?w=600";
+  if (lower.includes("ráy tai"))
+    return "/images/lay-ray-tai.png";
     
   // Mặc định (Cắt tóc nam)
   return "https://images.unsplash.com/photo-1593702275687-f8b402bf1fb5?w=600";
