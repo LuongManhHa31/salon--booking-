@@ -20,8 +20,8 @@ async function main() {
   const staffPasswordHash = await bcrypt.hash("Staff@123", 10);
   const staffAccounts = await Promise.all(
     [
-      { phone: "0900000001", fullName: "Nguyễn Văn Thợ", specialties: "Cắt tóc, Uốn" },
-      { phone: "0900000002", fullName: "Trần Thị Thợ", specialties: "Nhuộm, Duỗi" },
+      { phone: "0900000001", fullName: "Nguyễn Quang Minh", specialties: "Cắt tóc, Uốn" },
+      { phone: "0900000002", fullName: "Trần Thu Hà", specialties: "Nhuộm, Duỗi" },
       { phone: "0900000003", fullName: "Bùi Đức Minh", specialties: "Cắt tóc, Gội đầu dưỡng sinh" },
       { phone: "0900000004", fullName: "Thân Tuấn Vũ", specialties: "Nhuộm, Uốn" },
       { phone: "0900000005", fullName: "Dương Văn Tuấn", specialties: "Cắt tóc, Duỗi" },

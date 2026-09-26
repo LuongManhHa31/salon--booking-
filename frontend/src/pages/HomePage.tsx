@@ -243,10 +243,10 @@ export function HomePage() {
           </div>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
             {[
-              { name: "Nguyễn Văn Thợ", role: "Master Stylist", exp: "5 năm kinh nghiệm", img: "/images/male1.jpg" },
-              { name: "Trần Thị Thợ", role: "Color Specialist", exp: "7 năm kinh nghiệm", img: "/images/female1.jpg" },
-              { name: "Thân Tuấn Vũ", role: "Creative Director", exp: "10 năm kinh nghiệm", img: "/images/male2.jpg" },
-              { name: "Dương Văn Tuấn", role: "Senior Stylist", exp: "4 năm kinh nghiệm", img: "/images/male3.jpg" }
+              { name: "Nguyễn Quang Minh", role: "Master Stylist", exp: "5 năm kinh nghiệm", img: "/images/stylist_1.jpg" },
+              { name: "Trần Thu Hà", role: "Color Specialist", exp: "7 năm kinh nghiệm", img: "/images/stylist_2.jpg" },
+              { name: "Thân Tuấn Vũ", role: "Creative Director", exp: "10 năm kinh nghiệm", img: "/images/stylist_3.jpg" },
+              { name: "Dương Văn Tuấn", role: "Senior Stylist", exp: "4 năm kinh nghiệm", img: "/images/stylist_4.jpg" }
             ].map((staff, i) => (
               <div key={i} className="flex flex-col items-center group cursor-pointer">
                 <div className="w-32 h-32 md:w-40 md:h-40 rounded-full overflow-hidden mb-4 border-4 border-gray-50 shadow-md group-hover:border-blue-100 transition-all duration-300 group-hover:-translate-y-2">
