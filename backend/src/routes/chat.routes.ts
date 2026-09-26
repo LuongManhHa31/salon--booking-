@@ -107,12 +107,15 @@ muốn làm, phân cách bằng dấu "|". Gợi ý phải cụ thể theo ngữ
 tới, ngày vừa hỏi), không lặp lại gợi ý chung chung nếu không còn phù hợp. Ví dụ:
 ${SUGGESTION_MARKER} Xem bảng giá dịch vụ | Đặt lịch ngay | Đổi sang ngày khác
 
-NẾU khách hàng đã chốt xong nhu cầu, đồng ý đặt lịch hoặc đã chọn được người/dịch vụ cụ thể và muốn tiến hành đặt lịch, hãy chèn chính xác cụm "[BOOK_NOW;staffId;serviceIds;date]" vào cuối cùng của câu trả lời (trước cụm gợi ý).
+NẾU khách hàng muốn đặt lịch, hãy dùng công cụ để tìm giờ rảnh, sau đó hỏi khách muốn chọn giờ nào.
+KHI VÀ CHỈ KHI khách đã chốt được dịch vụ, người làm, ngày VÀ giờ, hãy chèn chính xác cụm "[BOOK_NOW;staffId;serviceIds;date;time]" vào cuối cùng của câu trả lời.
 Trong đó:
-- staffId: ID của nhân viên khách chọn (nếu có, nếu không thì điền NONE)
-- serviceIds: Các ID dịch vụ khách chọn, phân cách bằng dấu phẩy (ví dụ: id1,id2) (nếu không xác định thì điền NONE)
-- date: Ngày khách chọn (định dạng YYYY-MM-DD, nếu không có điền NONE)
-Ví dụ: [BOOK_NOW;cuid123;cuid456,cuid789;2026-09-24]
+- staffId: ID nhân viên (nếu không có điền NONE)
+- serviceIds: Các ID dịch vụ (nếu không có điền NONE)
+- date: Ngày khách chọn (YYYY-MM-DD, nếu không có điền NONE)
+- time: Giờ khách chọn (định dạng HH:mm, ví dụ 09:00, nếu không có điền NONE)
+Ví dụ: [BOOK_NOW;cuid123;cuid456;2026-09-24;09:00]
+Điều này sẽ ra lệnh cho giao diện tự động đặt lịch với đúng giờ khách đã chọn.
 Điều này sẽ ra lệnh cho giao diện hiển thị nút Đặt lịch trực tiếp.`;
 }
 
@@ -125,25 +128,37 @@ interface BookingIntent {
   staffId?: string;
   serviceIds?: string;
   date?: string;
+  time?: string;
 }
 
 function extractBookNow(text: string): { reply: string; bookingIntent?: BookingIntent } {
-  const match = text.match(/\[BOOK_NOW;(.*?);(.*?);(.*?)\]/);
+  const match = text.match(/\[BOOK_NOW;(.*?);(.*?);(.*?);(.*?)\]/);
   if (!match) {
-    const fallbackMatch = text.match(/\[BOOK_NOW\]/);
-    if (fallbackMatch) {
-      return { reply: text.replace(/\[BOOK_NOW\]/, "").trim(), bookingIntent: {} };
+    const fallbackMatch = text.match(/\[BOOK_NOW;(.*?);(.*?);(.*?)\]/);
+    if (!fallbackMatch) {
+      const basicMatch = text.match(/\[BOOK_NOW\]/);
+      if (basicMatch) {
+        return { reply: text.replace(/\[BOOK_NOW\]/, "").trim(), bookingIntent: {} };
+      }
+      return { reply: text, bookingIntent: undefined };
     }
-    return { reply: text, bookingIntent: undefined };
+    const staffId = fallbackMatch[1] === "NONE" ? undefined : fallbackMatch[1];
+    const serviceIds = fallbackMatch[2] === "NONE" ? undefined : fallbackMatch[2];
+    const date = fallbackMatch[3] === "NONE" ? undefined : fallbackMatch[3];
+    return {
+      reply: text.replace(fallbackMatch[0], "").trim(),
+      bookingIntent: { staffId, serviceIds, date },
+    };
   }
   
   const staffId = match[1] === "NONE" ? undefined : match[1];
   const serviceIds = match[2] === "NONE" ? undefined : match[2];
   const date = match[3] === "NONE" ? undefined : match[3];
+  const time = match[4] === "NONE" ? undefined : match[4];
 
   return {
     reply: text.replace(match[0], "").trim(),
-    bookingIntent: { staffId, serviceIds, date },
+    bookingIntent: { staffId, serviceIds, date, time },
   };
 }
 

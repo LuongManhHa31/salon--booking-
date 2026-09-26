@@ -24,7 +24,7 @@ export function ChatWidget() {
     setSuggestions([]);
     setLoading(true);
     try {
-      const res = await apiFetch<{ reply: string; handoff: boolean; suggestions?: string[]; bookingIntent?: { staffId?: string; serviceIds?: string; date?: string } }>("/chat", {
+      const res = await apiFetch<{ reply: string; handoff: boolean; suggestions?: string[]; bookingIntent?: { staffId?: string; serviceIds?: string; date?: string; time?: string } }>("/chat", {
         method: "POST",
         body: JSON.stringify({ messages: nextMessages }),
       });
@@ -62,6 +62,7 @@ export function ChatWidget() {
               if (m.bookingIntent?.staffId) params.set("staffId", m.bookingIntent.staffId);
               if (m.bookingIntent?.serviceIds) params.set("serviceIds", m.bookingIntent.serviceIds);
               if (m.bookingIntent?.date) params.set("date", m.bookingIntent.date);
+              if (m.bookingIntent?.time) params.set("time", m.bookingIntent.time);
 
               return (
               <div key={i} className={`flex flex-col gap-1.5 ${m.role === "user" ? "items-end" : "items-start"}`}>

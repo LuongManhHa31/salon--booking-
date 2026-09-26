@@ -26,6 +26,7 @@ export function QuickBookingPage() {
   const initialServiceIds = searchParams.get("serviceIds")?.split(",").filter(Boolean) ?? [];
   const initialStaffId = searchParams.get("staffId") ?? "";
   const initialDate = searchParams.get("date") ?? todayISO();
+  const initialTime = searchParams.get("time");
 
   const [services, setServices] = useState<Service[]>([]);
   const [staffList, setStaffList] = useState<StaffMember[]>([]);
@@ -49,6 +50,12 @@ export function QuickBookingPage() {
     apiFetch<{ staff: StaffMember[] }>("/staff").then((res) => setStaffList(res.staff));
   }, []);
 
+  useEffect(() => {
+    if (initialServiceIds.length > 0 && initialTime && step === "select") {
+      loadAvailability(true);
+    }
+  }, [initialServiceIds.length, initialTime, step]);
+
   const totalPrice = useMemo(
     () => services.filter((s) => selectedServiceIds.includes(s.id)).reduce((sum, s) => sum + Number(s.price), 0),
     [services, selectedServiceIds]
@@ -59,7 +66,7 @@ export function QuickBookingPage() {
     setSelectedServiceIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
   }
 
-  async function loadAvailability() {
+  async function loadAvailability(autoSelectInitialTime = false) {
     if (selectedServiceIds.length === 0) {
       setError("Vui lòng chọn ít nhất một dịch vụ");
       return;
@@ -72,6 +79,19 @@ export function QuickBookingPage() {
       if (selectedStaffId) params.set("staffId", selectedStaffId);
       const res = await apiFetch<{ slots: AvailabilitySlot[] }>(`/appointments/availability?${params.toString()}`);
       setSlots(res.slots);
+      
+      if (autoSelectInitialTime && initialTime) {
+        const slot = res.slots.find((s) => {
+          const t = new Date(s.start).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" });
+          return t === initialTime;
+        });
+        if (slot) {
+          setSelectedSlot(slot.start);
+          setStep("phone");
+        } else {
+          setError(`Rất tiếc, khung giờ ${initialTime} không còn trống hoặc không đủ thời gian.`);
+        }
+      }
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Không tải được khung giờ trống");
     } finally {
@@ -212,7 +232,7 @@ export function QuickBookingPage() {
                   setSlots([]);
                 }}
               />
-              <button onClick={loadAvailability} disabled={loadingSlots} className="bg-gray-800 text-white px-4 py-2 rounded-md hover:bg-gray-900 disabled:opacity-50">
+              <button onClick={() => loadAvailability(false)} disabled={loadingSlots} className="bg-gray-800 text-white px-4 py-2 rounded-md hover:bg-gray-900 disabled:opacity-50">
                 {loadingSlots ? "Đang tải..." : "Xem khung giờ trống"}
               </button>
             </div>

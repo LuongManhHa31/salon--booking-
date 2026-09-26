@@ -102,7 +102,7 @@ export interface NotificationItem {
 export interface ChatMessage {
   role: "user" | "assistant";
   content: string;
-  bookingIntent?: { staffId?: string; serviceIds?: string; date?: string };
+  bookingIntent?: { staffId?: string; serviceIds?: string; date?: string; time?: string };
 }
 
 export interface ReportSummary {
