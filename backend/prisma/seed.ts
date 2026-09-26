@@ -47,6 +47,7 @@ async function main() {
     { name: "Uốn tóc", description: "Uốn tạo kiểu", price: 600000, durationMinutes: 120 },
     { name: "Duỗi tóc", description: "Duỗi thẳng, phục hồi", price: 550000, durationMinutes: 100 },
     { name: "Gội đầu dưỡng sinh", description: "Thư giãn, massage da đầu", price: 80000, durationMinutes: 30 },
+    { name: "Lấy ráy tai êm", description: "Làm sạch, thư giãn, êm ái", price: 50000, durationMinutes: 20 },
   ];
 
   for (const s of services) {
