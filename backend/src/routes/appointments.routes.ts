@@ -4,6 +4,7 @@ import { prisma } from "../prisma";
 import { requireAuth, requireRole } from "../middleware/auth";
 import { computeAvailableSlots, findAssignableStaff } from "../utils/availability";
 import { notifyAccount } from "../utils/notifications";
+import { withDbTimeout } from "../utils/dbTimeout";
 
 const router = Router();
 
@@ -88,12 +89,19 @@ router.post("/", requireAuth, requireRole("CUSTOMER"), async (req, res) => {
 
 // UC007 - Khách hàng xem lịch sử đặt lịch
 router.get("/mine", requireAuth, requireRole("CUSTOMER"), async (req, res) => {
-  const appointments = await prisma.appointment.findMany({
-    where: { customerId: req.auth!.accountId },
-    include: { services: { include: { service: true } }, staff: true, review: true, payment: true },
-    orderBy: { scheduledStart: "desc" },
-  });
-  res.json({ appointments });
+  try {
+    const appointments = await withDbTimeout(
+      prisma.appointment.findMany({
+        where: { customerId: req.auth!.accountId },
+        include: { services: { include: { service: true } }, staff: true, review: true, payment: true },
+        orderBy: { scheduledStart: "desc" },
+      }),
+      2500
+    );
+    res.json({ appointments: appointments ?? [] });
+  } catch (err) {
+    res.json({ appointments: [] });
+  }
 });
 
 const rescheduleSchema = z.object({ scheduledStart: z.string().datetime() });

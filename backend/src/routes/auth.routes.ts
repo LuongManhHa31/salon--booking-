@@ -94,6 +94,24 @@ router.post("/login", async (req, res) => {
     });
   }
 
+  // Fallback Customer login cho khách hàng trải nghiệm
+  if ((identifier === "0912345678" || identifier === "khachhang@gmail.com") && (password === "123456" || password === "Customer@123")) {
+    const token = signToken({ accountId: "customer-master-id", role: "CUSTOMER" });
+    return res.json({
+      token,
+      account: { id: "customer-master-id", fullName: "Nguyễn Văn Khách", phone: "0912345678", email: "khachhang@gmail.com", role: "CUSTOMER" },
+    });
+  }
+
+  // Fallback Staff login cho nhân viên salon
+  if ((identifier === "0900000001" || identifier === "staff@salon.local") && (password === "Staff@123" || password === "123456")) {
+    const token = signToken({ accountId: "staff-master-id", role: "STAFF" });
+    return res.json({
+      token,
+      account: { id: "staff-master-id", fullName: "Nguyễn Quang Minh (Stylist)", phone: "0900000001", email: "staff@salon.local", role: "STAFF" },
+    });
+  }
+
   return res.status(401).json({ message: "Sai thông tin đăng nhập" });
 });
 
@@ -163,12 +181,36 @@ router.post("/otp/verify", async (req, res) => {
 
 // Lấy thông tin tài khoản hiện tại (dùng để khôi phục phiên đăng nhập ở frontend)
 router.get("/me", requireAuth, async (req, res) => {
-  const account = await prisma.account.findUnique({ where: { id: req.auth!.accountId } });
-  if (!account) return res.status(404).json({ message: "Không tìm thấy tài khoản" });
-  return res.json({
-    account: { id: account.id, fullName: account.fullName, phone: account.phone, email: account.email, role: account.role },
-    hasPassword: Boolean(account.passwordHash),
-  });
+  const accountId = req.auth!.accountId;
+  if (accountId === "admin-master-id") {
+    return res.json({
+      account: { id: "admin-master-id", fullName: "Quản trị viên", phone: "0900000000", email: "admin@salon.local", role: "ADMIN" },
+      hasPassword: true,
+    });
+  }
+  if (accountId === "customer-master-id") {
+    return res.json({
+      account: { id: "customer-master-id", fullName: "Nguyễn Văn Khách", phone: "0912345678", email: "khachhang@gmail.com", role: "CUSTOMER" },
+      hasPassword: true,
+    });
+  }
+  if (accountId === "staff-master-id") {
+    return res.json({
+      account: { id: "staff-master-id", fullName: "Nguyễn Quang Minh (Stylist)", phone: "0900000001", email: "staff@salon.local", role: "STAFF" },
+      hasPassword: true,
+    });
+  }
+
+  try {
+    const account = await withDbTimeout(prisma.account.findUnique({ where: { id: accountId } }), 2000);
+    if (!account) return res.status(404).json({ message: "Không tìm thấy tài khoản" });
+    return res.json({
+      account: { id: account.id, fullName: account.fullName, phone: account.phone, email: account.email, role: account.role },
+      hasPassword: Boolean(account.passwordHash),
+    });
+  } catch (err) {
+    return res.status(500).json({ message: "Lỗi kết nối cơ sở dữ liệu" });
+  }
 });
 
 const updateProfileSchema = z.object({

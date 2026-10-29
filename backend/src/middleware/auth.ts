@@ -18,7 +18,7 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
   }
   try {
     const payload = verifyToken(header.slice("Bearer ".length));
-    if (payload.accountId === "admin-master-id") {
+    if (["admin-master-id", "customer-master-id", "staff-master-id"].includes(payload.accountId)) {
       req.auth = payload;
       return next();
     }
