@@ -17,15 +17,17 @@ function formatPrice(n: number) {
 export function AdminReportsPage() {
   const [summary, setSummary] = useState<ReportSummary | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     apiFetch<ReportSummary>("/reports/summary")
       .then(setSummary)
+      .catch((err) => setError(err.message || "Không tải được báo cáo"))
       .finally(() => setLoading(false));
   }, []);
 
   if (loading) return <p className="text-center py-10 text-gray-500">Đang tải...</p>;
-  if (!summary) return <p className="text-center py-10 text-gray-500">Không tải được báo cáo.</p>;
+  if (!summary) return <p className="text-center py-10 text-red-500">{error || "Không tải được báo cáo."}</p>;
 
   const maxDaily = Math.max(1, ...summary.dailyRevenue.map((d) => d.revenue));
 

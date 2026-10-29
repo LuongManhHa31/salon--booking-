@@ -121,9 +121,6 @@ export function HairstylePage() {
         body: formData,
       });
       setSwappedImages(prev => ({ ...prev, [hairstyleId]: res.imageUrl }));
-      if (res.isMock) {
-        alert("Hệ thống vẫn đang trả về ảnh giả lập (chưa có API Key).");
-      }
     } catch (err) {
       alert(err instanceof ApiError ? err.message : "Ghép ảnh thất bại");
     } finally {

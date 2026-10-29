@@ -16,17 +16,22 @@ import {
 const router = Router();
 
 const registerSchema = z.object({
-  fullName: z.string().min(2),
-  phone: z.string().min(8).max(15),
-  email: z.string().email().optional(),
-  password: z.string().min(6),
+  fullName: z.string().min(1, "Vui lòng nhập họ tên"),
+  phone: z.string().min(8, "Số điện thoại từ 8 đến 15 số").max(15, "Số điện thoại từ 8 đến 15 số"),
+  email: z
+    .string()
+    .optional()
+    .nullable()
+    .transform((val) => (val && val.trim() ? val.trim() : undefined)),
+  password: z.string().min(6, "Mật khẩu tối thiểu 6 ký tự"),
 });
 
 // UC002 - Đăng ký tài khoản (khách hàng)
 router.post("/register", async (req, res) => {
   const parsed = registerSchema.safeParse(req.body);
   if (!parsed.success) {
-    return res.status(400).json({ message: "Thông tin đăng ký không hợp lệ", errors: parsed.error.flatten() });
+    const errorMsg = parsed.error.issues?.[0]?.message || "Thông tin đăng ký không hợp lệ";
+    return res.status(400).json({ message: errorMsg, errors: parsed.error.flatten() });
   }
   const { fullName, phone, email, password } = parsed.data;
 

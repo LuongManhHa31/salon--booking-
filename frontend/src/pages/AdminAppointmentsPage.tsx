@@ -23,8 +23,10 @@ export function AdminAppointmentsPage() {
 
   function load() {
     setLoading(true);
+    setError(null);
     apiFetch<{ appointments: Appointment[] }>("/appointments")
-      .then((res) => setAppointments(res.appointments))
+      .then((res) => setAppointments(res.appointments || []))
+      .catch((err) => setError(err instanceof ApiError ? err.message : "Không thể tải lịch hẹn"))
       .finally(() => setLoading(false));
   }
 

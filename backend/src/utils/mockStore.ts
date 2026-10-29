@@ -428,3 +428,37 @@ export const FALLBACK_CUSTOMERS: FallbackCustomer[] = [
   { id: "cust-010", fullName: "Nguyễn Thị Mai", phone: "0919882211", email: "mai.nguyen@gmail.com", locked: false, isQuickProfile: false, createdAt: new Date().toISOString() },
   { id: "cust-011", fullName: "Bùi Quốc Khánh", phone: "0981239876", email: "khanh.bui@gmail.com", locked: false, isQuickProfile: true, createdAt: new Date().toISOString() },
 ];
+
+export interface MockHairstyle {
+  id: string;
+  name: string;
+  gender: "MALE" | "FEMALE";
+  faceShapes: string[];
+  colorTag: string;
+  description: string;
+  imageUrl: string;
+}
+
+export const FALLBACK_HAIRSTYLES: MockHairstyle[] = [
+  // Nam
+  { id: "hs-m-1", name: "Undercut Hiện Đại", gender: "MALE", faceShapes: ["OVAL", "SQUARE"], colorTag: "#1a1a1a", description: "Cắt ngắn hai bên, để dài vuốt phồng phần đỉnh", imageUrl: "/images/male1.jpg" },
+  { id: "hs-m-2", name: "Side Part Cổ Điển", gender: "MALE", faceShapes: ["ROUND", "OVAL"], colorTag: "#4a2c1a", description: "Rẽ ngôi lịch lãm, phong độ quý ông", imageUrl: "/images/male2.jpg" },
+  { id: "hs-m-3", name: "Crew Cut Gọn Gàng", gender: "MALE", faceShapes: ["ROUND", "SQUARE", "DIAMOND"], colorTag: "#1a1a1a", description: "Cắt ngắn nam tính, mát mẻ, dễ chăm sóc", imageUrl: "/images/male3.jpg" },
+  { id: "hs-m-4", name: "Buzz Cut Cá Tính", gender: "MALE", faceShapes: ["OVAL", "DIAMOND", "LONG"], colorTag: "#5c4a3a", description: "Cắt sát đầu, tôn đường nét góc cạnh khuôn mặt", imageUrl: "/images/male4.jpg" },
+  { id: "hs-m-5", name: "Textured Quiff", gender: "MALE", faceShapes: ["OVAL", "HEART", "LONG"], colorTag: "#4a2c1a", description: "Vuốt phồng bồng bềnh tạo khối đỉnh đầu thời thượng", imageUrl: "/images/male5.jpg" },
+  { id: "hs-m-6", name: "Slick Back Phong Cách", gender: "MALE", faceShapes: ["SQUARE", "DIAMOND", "OVAL"], colorTag: "#1a1a1a", description: "Chải ngược toàn bộ ra sau bóng mượt", imageUrl: "/images/male6.jpg" },
+  // Nữ
+  { id: "hs-f-1", name: "Tóc Layer Dài Mái Bay", gender: "FEMALE", faceShapes: ["ROUND", "OVAL", "SQUARE", "HEART"], colorTag: "#6b3f2a", description: "Tỉa layer mềm mại, ôm má che khuyết điểm mặt tròn", imageUrl: "/images/asian_layer.jpg" },
+  { id: "hs-f-2", name: "Tóc Bob Uốn Cụp", gender: "FEMALE", faceShapes: ["OVAL", "LONG", "HEART", "DIAMOND"], colorTag: "#4a2c1a", description: "Ngắn ngang cằm, uốn chữ C trẻ trung thanh lịch", imageUrl: "/images/user_upload_1.jpg" },
+  { id: "hs-f-3", name: "Xoăn Sóng Lơi Hàn Quốc", gender: "FEMALE", faceShapes: ["SQUARE", "DIAMOND", "OVAL", "ROUND"], colorTag: "#a06a3a", description: "Sóng lơi bồng bềnh tự nhiên, tăng độ dày mái tóc", imageUrl: "/images/female1.jpg" },
+  { id: "hs-f-4", name: "Tóc Lửng Ngang Vai (Lob)", gender: "FEMALE", faceShapes: ["ROUND", "HEART", "OVAL"], colorTag: "#6b3f2a", description: "Trẻ trung, năng động, thanh lịch dễ chăm sóc", imageUrl: "/images/female2.jpg" },
+  { id: "hs-f-5", name: "Tóc Thẳng Dài Tự Nhiên", gender: "FEMALE", faceShapes: ["LONG", "OVAL", "HEART"], colorTag: "#1a1a1a", description: "Suôn mượt thướt tha, dịu dàng chuẩn Á Đông", imageUrl: "/images/female3.jpg" },
+  { id: "hs-f-6", name: "Xoăn Hippie Cá Tính", gender: "FEMALE", faceShapes: ["DIAMOND", "SQUARE", "OVAL", "LONG"], colorTag: "#5a4a42", description: "Xoăn xù mì phá cách đậm chất vintage", imageUrl: "/images/female4.jpg" },
+  { id: "hs-f-7", name: "Tóc Mái Thưa Khóa Mặt", gender: "FEMALE", faceShapes: ["LONG", "HEART", "SQUARE", "OVAL"], colorTag: "#6b3f2a", description: "Mái thưa che trán cao, cân đối khuôn mặt", imageUrl: "/images/female5.jpg" },
+  { id: "hs-f-8", name: "Tóc Ngắn Tomboy", gender: "FEMALE", faceShapes: ["OVAL", "HEART", "DIAMOND"], colorTag: "#1a1a1a", description: "Cắt sát gọn gàng, tôn đường nét khuôn mặt thanh tú", imageUrl: "/images/female6.jpg" },
+  { id: "hs-f-9", name: "Xoăn Lọn To Đuôi", gender: "FEMALE", faceShapes: ["ROUND", "SQUARE", "LONG", "OVAL"], colorTag: "#a06a3a", description: "Uốn lọn to bồng bềnh phần đuôi sang trọng quý phái", imageUrl: "/images/female7.jpg" },
+  { id: "hs-f-10", name: "Tóc Layer Ngắn Wolf Cut", gender: "FEMALE", faceShapes: ["ROUND", "DIAMOND", "HEART"], colorTag: "#5a4a42", description: "Layer tầng cao cực kỳ cá tính hiện đại", imageUrl: "/images/female8.jpg" },
+  { id: "hs-f-11", name: "Tóc Hime Nhật Bản", gender: "FEMALE", faceShapes: ["OVAL", "LONG", "HEART"], colorTag: "#1a1a1a", description: "Cắt bằng hai bên má ấn tượng đậm chất anime Nhật Bản", imageUrl: "/images/female9.jpg" },
+  { id: "hs-f-12", name: "Buộc Cao Đuôi Ngựa", gender: "FEMALE", faceShapes: ["ROUND", "OVAL", "SQUARE", "HEART"], colorTag: "#1a1a1a", description: "Kiểu buộc đuôi ngựa trẻ trung năng động thanh lịch", imageUrl: "/images/female10.jpg" },
+];
+
