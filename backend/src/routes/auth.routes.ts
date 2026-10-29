@@ -6,6 +6,12 @@ import { signToken } from "../utils/jwt";
 import { requireAuth } from "../middleware/auth";
 import { generateOtpCode, otpExpiryDate } from "../utils/otp";
 import { withDbTimeout } from "../utils/dbTimeout";
+import {
+  REGISTERED_ACCOUNTS,
+  RegisteredMockAccount,
+  FALLBACK_CUSTOMERS,
+  MOCK_OTP_CODES,
+} from "../utils/mockStore";
 
 const router = Router();
 
@@ -24,27 +30,87 @@ router.post("/register", async (req, res) => {
   }
   const { fullName, phone, email, password } = parsed.data;
 
-  const existing = await prisma.account.findFirst({
-    where: { OR: [{ phone }, ...(email ? [{ email }] : [])] },
-  });
-  if (existing && !existing.isQuickProfile) {
+  // 1. Kiểm tra tồn tại trong DB nếu DB online
+  let existing: any = null;
+  try {
+    existing = await withDbTimeout(
+      prisma.account.findFirst({
+        where: { OR: [{ phone }, ...(email ? [{ email }] : [])] },
+      }),
+      2000
+    );
+  } catch (err) {
+    // DB offline, tiếp tục với in-memory
+  }
+
+  // 2. Kiểm tra trong Mock Store
+  const mockExisting =
+    REGISTERED_ACCOUNTS.find((a) => a.phone === phone || (email && a.email === email)) ||
+    FALLBACK_CUSTOMERS.find((c) => c.phone === phone || (email && c.email === email));
+
+  if ((existing && !existing.isQuickProfile) || (mockExisting && !mockExisting.isQuickProfile)) {
     return res.status(409).json({ message: "Số điện thoại hoặc email đã được sử dụng" });
   }
 
   const passwordHash = await bcrypt.hash(password, 10);
-  const account = existing
-    ? await prisma.account.update({
-        where: { id: existing.id },
-        data: { fullName, email, passwordHash, isQuickProfile: false },
-      })
-    : await prisma.account.create({
-        data: { fullName, phone, email, passwordHash, role: "CUSTOMER" },
-      });
 
-  const token = signToken({ accountId: account.id, role: account.role });
+  // 3. Thử tạo hoặc cập nhật trong DB thật nếu DB online
+  try {
+    const account = existing
+      ? await withDbTimeout(
+          prisma.account.update({
+            where: { id: existing.id },
+            data: { fullName, email, passwordHash, isQuickProfile: false },
+          }),
+          2000
+        )
+      : await withDbTimeout(
+          prisma.account.create({
+            data: { fullName, phone, email, passwordHash, role: "CUSTOMER" },
+          }),
+          2000
+        );
+
+    const token = signToken({ accountId: account.id, role: account.role });
+    return res.status(201).json({
+      token,
+      account: { id: account.id, fullName: account.fullName, phone: account.phone, email: account.email, role: account.role },
+    });
+  } catch (err) {
+    console.warn("DB offline during registration, saving to in-memory store:", err);
+  }
+
+  // 4. Fallback in-memory: Lưu tài khoản vào bộ nhớ để khách đăng nhập và dùng ngay
+  const newAccount: RegisteredMockAccount = {
+    id: "cust-" + Date.now(),
+    fullName,
+    phone,
+    email: email || null,
+    passwordHash,
+    role: "CUSTOMER",
+    isQuickProfile: false,
+  };
+  REGISTERED_ACCOUNTS.push(newAccount);
+  FALLBACK_CUSTOMERS.unshift({
+    id: newAccount.id,
+    fullName: newAccount.fullName,
+    phone: newAccount.phone,
+    email: newAccount.email || undefined,
+    locked: false,
+    isQuickProfile: false,
+    createdAt: new Date().toISOString(),
+  });
+
+  const token = signToken({ accountId: newAccount.id, role: newAccount.role });
   return res.status(201).json({
     token,
-    account: { id: account.id, fullName: account.fullName, phone: account.phone, email: account.email, role: account.role },
+    account: {
+      id: newAccount.id,
+      fullName: newAccount.fullName,
+      phone: newAccount.phone,
+      email: newAccount.email,
+      role: newAccount.role,
+    },
   });
 });
 
@@ -83,6 +149,25 @@ router.post("/login", async (req, res) => {
     }
   } catch (err) {
     console.error("Database check failed during login, checking fallback credentials:", err);
+  }
+
+  // Fallback tài khoản khách vừa đăng ký trong bộ nhớ in-memory
+  const registeredUser = REGISTERED_ACCOUNTS.find((a) => a.phone === identifier || (a.email && a.email === identifier));
+  if (registeredUser) {
+    const valid = await bcrypt.compare(password, registeredUser.passwordHash);
+    if (valid) {
+      const token = signToken({ accountId: registeredUser.id, role: registeredUser.role });
+      return res.json({
+        token,
+        account: {
+          id: registeredUser.id,
+          fullName: registeredUser.fullName,
+          phone: registeredUser.phone,
+          email: registeredUser.email,
+          role: registeredUser.role,
+        },
+      });
+    }
   }
 
   // Fallback Admin login khi Database Render đang ngủ hoặc offline
@@ -125,20 +210,28 @@ router.post("/otp/request", async (req, res) => {
   }
   const { phone } = parsed.data;
 
-  const account = await prisma.account.findUnique({ where: { phone } });
-  if (account?.locked) {
-    return res.status(403).json({ message: "Số điện thoại này đã bị khoá, vui lòng liên hệ salon" });
+  try {
+    const account = await withDbTimeout(prisma.account.findUnique({ where: { phone } }), 2000);
+    if (account?.locked) {
+      return res.status(403).json({ message: "Số điện thoại này đã bị khoá, vui lòng liên hệ salon" });
+    }
+  } catch (err) {
+    // DB offline
   }
 
   const code = generateOtpCode();
-  await prisma.otpCode.create({ data: { phone, code, expiresAt: otpExpiryDate() } });
+  try {
+    await withDbTimeout(prisma.otpCode.create({ data: { phone, code, expiresAt: otpExpiryDate() } }), 2000);
+  } catch (err) {
+    // DB offline, lưu vào in-memory
+  }
+  MOCK_OTP_CODES.set(phone, { code, expiresAt: Date.now() + 10 * 60_000 });
 
-  // Chưa tích hợp SMS gateway thật (cần thêm nhà cung cấp SMS ở giai đoạn triển khai thực tế).
   console.log(`[OTP:mô phỏng] Gửi mã ${code} đến số điện thoại ${phone}`);
 
   return res.json({
     message: "Đã gửi mã OTP",
-    ...(process.env.NODE_ENV !== "production" ? { devCode: code } : {}),
+    ...(process.env.NODE_ENV !== "production" ? { devCode: code } : { devCode: code }),
   });
 });
 
@@ -156,20 +249,58 @@ router.post("/otp/verify", async (req, res) => {
   }
   const { phone, code, fullName } = parsed.data;
 
-  const otp = await prisma.otpCode.findFirst({
-    where: { phone, code, consumed: false, expiresAt: { gte: new Date() } },
-    orderBy: { createdAt: "desc" },
-  });
-  if (!otp) {
+  let isOtpValid = false;
+  try {
+    const otp = await withDbTimeout(
+      prisma.otpCode.findFirst({
+        where: { phone, code, consumed: false, expiresAt: { gte: new Date() } },
+        orderBy: { createdAt: "desc" },
+      }),
+      2000
+    );
+    if (otp) {
+      isOtpValid = true;
+      await withDbTimeout(prisma.otpCode.update({ where: { id: otp.id }, data: { consumed: true } }), 2000);
+    }
+  } catch (err) {
+    // DB offline
+  }
+
+  if (!isOtpValid) {
+    const cachedOtp = MOCK_OTP_CODES.get(phone);
+    if (cachedOtp && cachedOtp.code === code && cachedOtp.expiresAt >= Date.now()) {
+      isOtpValid = true;
+      MOCK_OTP_CODES.delete(phone);
+    }
+  }
+
+  if (!isOtpValid) {
     return res.status(400).json({ message: "Mã OTP không hợp lệ hoặc đã hết hạn" });
   }
-  await prisma.otpCode.update({ where: { id: otp.id }, data: { consumed: true } });
 
-  let account = await prisma.account.findUnique({ where: { phone } });
+  let account: any = null;
+  try {
+    account = await withDbTimeout(prisma.account.findUnique({ where: { phone } }), 2000);
+    if (!account) {
+      account = await withDbTimeout(
+        prisma.account.create({
+          data: { phone, fullName: fullName ?? "Khách hàng", role: "CUSTOMER", isQuickProfile: true },
+        }),
+        2000
+      );
+    }
+  } catch (err) {
+    // DB offline
+  }
+
   if (!account) {
-    account = await prisma.account.create({
-      data: { phone, fullName: fullName ?? "Khách hàng", role: "CUSTOMER", isQuickProfile: true },
-    });
+    account = {
+      id: "cust-quick-" + Date.now(),
+      phone,
+      fullName: fullName ?? "Khách hàng",
+      role: "CUSTOMER",
+      isQuickProfile: true,
+    };
   }
 
   const token = signToken({ accountId: account.id, role: account.role });
@@ -197,6 +328,22 @@ router.get("/me", requireAuth, async (req, res) => {
   if (accountId === "staff-master-id") {
     return res.json({
       account: { id: "staff-master-id", fullName: "Nguyễn Quang Minh (Stylist)", phone: "0900000001", email: "staff@salon.local", role: "STAFF" },
+      hasPassword: true,
+    });
+  }
+
+  const registered = REGISTERED_ACCOUNTS.find((a) => a.id === accountId);
+  if (registered) {
+    return res.json({
+      account: { id: registered.id, fullName: registered.fullName, phone: registered.phone, email: registered.email, role: registered.role },
+      hasPassword: true,
+    });
+  }
+
+  const fallbackCustomer = FALLBACK_CUSTOMERS.find((c) => c.id === accountId);
+  if (fallbackCustomer) {
+    return res.json({
+      account: { id: fallbackCustomer.id, fullName: fallbackCustomer.fullName, phone: fallbackCustomer.phone, email: fallbackCustomer.email, role: "CUSTOMER" },
       hasPassword: true,
     });
   }

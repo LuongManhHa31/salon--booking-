@@ -1,3 +1,16 @@
+export interface RegisteredMockAccount {
+  id: string;
+  fullName: string;
+  phone: string;
+  email?: string | null;
+  passwordHash: string;
+  role: "CUSTOMER";
+  isQuickProfile: boolean;
+}
+
+export const REGISTERED_ACCOUNTS: RegisteredMockAccount[] = [];
+export const MOCK_OTP_CODES = new Map<string, { code: string; expiresAt: number }>();
+
 export interface MockService {
   id: string;
   name: string;
@@ -391,7 +404,17 @@ export const MOCK_APPOINTMENTS: MockAppointment[] = [
   },
 ];
 
-export const FALLBACK_CUSTOMERS = [
+export interface FallbackCustomer {
+  id: string;
+  fullName: string;
+  phone: string;
+  email?: string | null;
+  locked: boolean;
+  isQuickProfile: boolean;
+  createdAt: string;
+}
+
+export const FALLBACK_CUSTOMERS: FallbackCustomer[] = [
   { id: "customer-master-id", fullName: "Nguyễn Văn Khách", phone: "0912345678", email: "khachhang@gmail.com", locked: false, isQuickProfile: false, createdAt: new Date().toISOString() },
   { id: "cust-001", fullName: "Lê Hoàng Nam", phone: "0911223344", email: "nam.le@gmail.com", locked: false, isQuickProfile: false, createdAt: new Date().toISOString() },
   { id: "cust-002", fullName: "Trần Thị Thu Thảo", phone: "0987654321", email: "thuthao.tran@gmail.com", locked: false, isQuickProfile: false, createdAt: new Date().toISOString() },
