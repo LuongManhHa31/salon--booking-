@@ -45,10 +45,21 @@ export function BookingPage() {
 
     apiFetch<{ services: Service[] }>("/services")
       .then((res) => {
-        if (active && res.services && res.services.length > 0) setServices(res.services);
-        else if (active) setServices(DEFAULT_SERVICES);
+        if (active && res.services && res.services.length > 0) {
+          setServices(res.services);
+          // Tự động chọn dịch vụ đầu tiên nếu khách chưa chọn dịch vụ nào
+          setSelectedServiceIds((prev) => (prev.length > 0 ? prev : [res.services[0].id]));
+        } else if (active) {
+          setServices(DEFAULT_SERVICES);
+          setSelectedServiceIds((prev) => (prev.length > 0 ? prev : [DEFAULT_SERVICES[0].id]));
+        }
       })
-      .catch(() => { if (active) setServices(DEFAULT_SERVICES); });
+      .catch(() => {
+        if (active) {
+          setServices(DEFAULT_SERVICES);
+          setSelectedServiceIds((prev) => (prev.length > 0 ? prev : [DEFAULT_SERVICES[0].id]));
+        }
+      });
 
     apiFetch<{ staff: StaffMember[] }>("/staff")
       .then((res) => {
@@ -71,6 +82,12 @@ export function BookingPage() {
     () => services.filter((s) => selectedServiceIds.includes(s.id)).reduce((sum, s) => sum + Number(s.price), 0),
     [services, selectedServiceIds]
   );
+
+  useEffect(() => {
+    if (selectedServiceIds.length > 0) {
+      loadAvailability();
+    }
+  }, [date, selectedServiceIds.join(","), selectedStaffId]);
 
   function toggleService(id: string) {
     setSelectedSlot(null);
@@ -182,44 +199,92 @@ export function BookingPage() {
         <div className="flex items-center gap-3 mb-4">
           <input
             type="date"
-            className="border border-gray-300 rounded-md px-3 py-2"
+            className="border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
             value={date}
             min={todayISO()}
             onChange={(e) => {
               setDate(e.target.value);
               setSelectedSlot(null);
-              setSlots([]);
             }}
           />
           <button
+            type="button"
             onClick={loadAvailability}
             disabled={loadingSlots}
-            className="bg-gray-800 text-white px-4 py-2 rounded-md hover:bg-gray-900 disabled:opacity-50"
+            className="bg-gray-800 text-white px-4 py-2 rounded-md hover:bg-gray-900 disabled:opacity-50 text-sm font-medium transition-colors"
           >
-            {loadingSlots ? "Đang tải..." : "Xem khung giờ trống"}
+            {loadingSlots ? "Đang tải giờ trống..." : "Làm mới khung giờ"}
           </button>
         </div>
-        {slots.length > 0 && (
-          <div className="grid grid-cols-3 sm:grid-cols-5 gap-2">
-            {slots.map((slot) => {
-              const time = new Date(slot.start).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" });
-              const isSelected = selectedSlot === slot.start;
-              return (
-                <button
-                  key={slot.start}
-                  onClick={() => setSelectedSlot(slot.start)}
-                  className={`border rounded-md py-2 text-sm ${
-                    isSelected ? "bg-brand-600 text-white border-brand-600" : "border-gray-300 hover:border-brand-500"
-                  }`}
-                >
-                  {time}
-                </button>
-              );
-            })}
+
+        {loadingSlots && (
+          <div className="py-6 text-center text-sm text-gray-500">
+            <span className="inline-block animate-spin mr-2">⏳</span> Đang tải các khung giờ khả dụng...
           </div>
         )}
-        {!loadingSlots && slots.length === 0 && (
-          <p className="text-sm text-gray-500">Chọn dịch vụ và bấm "Xem khung giờ trống" để bắt đầu.</p>
+
+        {!loadingSlots && slots.length > 0 && (
+          <div>
+            <p className="text-xs text-gray-500 mb-2 font-medium">Bấm vào một khung giờ bên dưới để chọn:</p>
+            <div className="grid grid-cols-3 sm:grid-cols-5 md:grid-cols-6 gap-2">
+              {slots.map((slot) => {
+                const time = new Date(slot.start).toLocaleTimeString("vi-VN", {
+                  hour: "2-digit",
+                  minute: "2-digit",
+                  hour12: false,
+                });
+                const isSelected = selectedSlot === slot.start;
+                return (
+                  <button
+                    key={slot.start}
+                    type="button"
+                    onClick={() => setSelectedSlot(slot.start)}
+                    className={`border rounded-lg py-2.5 px-2 text-sm font-semibold transition-all flex items-center justify-center gap-1 ${
+                      isSelected
+                        ? "bg-brand-600 text-white border-brand-600 shadow-md ring-2 ring-brand-300 scale-[1.02]"
+                        : "bg-white text-gray-700 border-gray-300 hover:border-brand-500 hover:bg-brand-50/50"
+                    }`}
+                  >
+                    {isSelected && <span className="text-xs">✓</span>}
+                    <span>{time}</span>
+                  </button>
+                );
+              })}
+            </div>
+            {selectedSlot && (
+              <p className="text-xs text-emerald-700 font-medium mt-2.5 bg-emerald-50 px-3 py-1.5 rounded-md inline-block border border-emerald-200">
+                ✓ Đã chọn khung giờ:{" "}
+                {new Date(selectedSlot).toLocaleTimeString("vi-VN", {
+                  hour: "2-digit",
+                  minute: "2-digit",
+                  hour12: false,
+                })}{" "}
+                ngày {new Date(selectedSlot).toLocaleDateString("vi-VN")}
+              </p>
+            )}
+          </div>
+        )}
+
+        {!loadingSlots && slots.length === 0 && selectedServiceIds.length > 0 && (
+          <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 text-sm text-amber-800">
+            <p className="font-medium">Chưa có khung giờ trống nào trong ngày đã chọn.</p>
+            <p className="text-xs text-amber-700 mt-1">Khung giờ hôm nay có thể đã kín hoặc qua giờ phục vụ (salon mở cửa từ 9h - 19h).</p>
+            <button
+              type="button"
+              onClick={() => {
+                const tomorrow = new Date();
+                tomorrow.setDate(tomorrow.getDate() + 1);
+                setDate(tomorrow.toISOString().slice(0, 10));
+              }}
+              className="mt-2.5 inline-flex items-center gap-1.5 px-3 py-1.5 bg-brand-600 text-white text-xs font-medium rounded-md hover:bg-brand-700 shadow-sm transition-all"
+            >
+              📅 Xem khung giờ ngày mai
+            </button>
+          </div>
+        )}
+
+        {!loadingSlots && slots.length === 0 && selectedServiceIds.length === 0 && (
+          <p className="text-sm text-gray-500">Vui lòng chọn ít nhất một dịch vụ ở mục 1 để xem các khung giờ trống.</p>
         )}
       </section>
 

@@ -512,9 +512,8 @@ async function chatWithGemini(
     async function executeChat(modelName: string): Promise<string> {
       const config: any = {
         systemInstruction: systemPrompt,
-        thinkingConfig: { thinkingBudget: 0 },
-        maxOutputTokens: 250, // Giới hạn token đầu ra vừa đủ để phản hồi siêu nhanh trong < 1.5s
-        temperature: 0.4, // Phản hồi tập trung, chính xác và nhanh hơn
+        maxOutputTokens: 350,
+        temperature: 0.5,
       };
       if (needsSlotTool) {
         config.tools = [{ functionDeclarations: [geminiSlotsTool] }];
@@ -547,11 +546,13 @@ async function chatWithGemini(
     try {
       return await executeChat(chosenModel);
     } catch (err: any) {
-      if (err?.status === 503 || /high demand|UNAVAILABLE/i.test(err?.message || "")) {
-        console.warn(`Model ${chosenModel} quá tải (503), tự động chuyển sang ${GEMINI_FALLBACK_CHAT_MODEL}...`);
+      console.warn(`Model ${chosenModel} gặp lỗi, thử chuyển sang fallback model ${GEMINI_FALLBACK_CHAT_MODEL}...`, err?.message);
+      try {
         return await executeChat(GEMINI_FALLBACK_CHAT_MODEL);
+      } catch (fallbackErr: any) {
+        console.error("Gemini fallback cũng gặp lỗi:", fallbackErr);
+        throw fallbackErr;
       }
-      throw err;
     }
   });
 

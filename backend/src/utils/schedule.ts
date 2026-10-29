@@ -3,11 +3,13 @@ export const SALON_CLOSE_HOUR = 19;
 export const SLOT_STEP_MINUTES = 30;
 
 export function generateCandidateSlots(dateISO: string, totalDurationMinutes: number): Date[] {
-  const [year, month, day] = dateISO.split("-").map(Number);
-  const slots: Date[] = [];
+  const openH = String(SALON_OPEN_HOUR).padStart(2, "0");
+  const closeH = String(SALON_CLOSE_HOUR).padStart(2, "0");
 
-  const dayStart = new Date(year, month - 1, day, SALON_OPEN_HOUR, 0, 0, 0);
-  const dayEnd = new Date(year, month - 1, day, SALON_CLOSE_HOUR, 0, 0, 0);
+  // Luôn xác định giờ làm việc theo múi giờ Việt Nam (+07:00) trên mọi môi trường (Render, Vercel, localhost)
+  const dayStart = new Date(`${dateISO}T${openH}:00:00+07:00`);
+  const dayEnd = new Date(`${dateISO}T${closeH}:00:00+07:00`);
+  const slots: Date[] = [];
 
   let cursor = new Date(dayStart);
   while (cursor.getTime() + totalDurationMinutes * 60_000 <= dayEnd.getTime()) {

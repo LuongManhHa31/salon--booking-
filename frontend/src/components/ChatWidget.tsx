@@ -27,7 +27,7 @@ interface AIStatusResponse {
 export function ChatWidget() {
   const [open, setOpen] = useState(false);
   const [provider, setProvider] = useState<"llama" | "gemini" | "auto">("auto");
-  const [model, setModel] = useState<string>("gemini-2.5-flash");
+  const [model, setModel] = useState<string>("gemini-3.5-flash-lite");
   const [aiStatus, setAiStatus] = useState<AIStatusResponse | null>(null);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -38,7 +38,7 @@ export function ChatWidget() {
       role: "assistant",
       content: "Xin chào! Mình là trợ lý AI Salon. Mình có thể tư vấn dịch vụ, chính sách, gợi ý kiểu tóc và tìm khung giờ trống giúp bạn!",
       provider: "gemini",
-      model: "Gemini 2.5 Flash",
+      model: "Gemini 3.5 Flash",
     },
   ]);
   const [input, setInput] = useState("");
@@ -72,7 +72,7 @@ export function ChatWidget() {
           if (data.activeProvider === "llama" && data.providers.llama?.model) {
             setModel(data.providers.llama.model);
           } else {
-            setModel("gemini-2.5-flash-lite");
+            setModel("gemini-3.5-flash-lite");
           }
         })
         .catch(() => {
@@ -194,7 +194,7 @@ export function ChatWidget() {
                   if (p === "llama") {
                     setModel(aiStatus?.providers.llama?.model || "llama3.1:8b");
                   } else {
-                    setModel("gemini-2.5-flash-lite");
+                    setModel("gemini-3.5-flash-lite");
                   }
                 }}
                 className="bg-white border border-gray-300 rounded px-2 py-0.5 text-xs text-gray-700 focus:outline-none focus:ring-1 focus:ring-brand-500 font-medium"

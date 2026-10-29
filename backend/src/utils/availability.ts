@@ -61,8 +61,8 @@ export async function computeAvailableSlots(
     return { error: "Không tìm thấy nhân viên khả dụng" };
   }
 
-  const dayStart = new Date(`${date}T00:00:00`);
-  const dayEnd = new Date(`${date}T23:59:59`);
+  const dayStart = new Date(`${date}T00:00:00+07:00`);
+  const dayEnd = new Date(`${date}T23:59:59+07:00`);
 
   let existingAppointments: { staffId: string | null; scheduledStart: Date; scheduledEnd: Date }[] = [];
   try {
@@ -96,8 +96,14 @@ export async function computeAvailableSlots(
   existingAppointments = [...existingAppointments, ...mockDayAppts];
 
   const candidateTimes = generateCandidateSlots(date, totalDuration);
+  const now = new Date();
+  const minBookingTime = new Date(now.getTime() + 10 * 60_000);
 
   const slots = candidateTimes
+    .filter((slotStart) => {
+      // Nếu là khung giờ đã trôi qua trong ngày hôm nay thì bỏ qua
+      return slotStart.getTime() >= minBookingTime.getTime();
+    })
     .map((slotStart) => {
       const slotEnd = new Date(slotStart.getTime() + totalDuration * 60_000);
       const freeStaffIds = candidateStaff
