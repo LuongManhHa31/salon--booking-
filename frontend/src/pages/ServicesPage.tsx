@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { apiFetch } from "../api/client";
 import { Service } from "../types";
+import { DEFAULT_SERVICES } from "../constants/fallbackData";
 
 function formatPrice(price: string) {
   return Number(price).toLocaleString("vi-VN") + "đ";
@@ -33,9 +34,34 @@ export function ServicesPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    let active = true;
+    // Timeout 3s: nếu máy chủ Render phản hồi chậm hoặc đang ngủ, tự động nạp danh sách dự phòng
+    const timer = setTimeout(() => {
+      if (active) {
+        setServices((prev) => (prev.length > 0 ? prev : DEFAULT_SERVICES));
+        setLoading(false);
+      }
+    }, 3000);
+
     apiFetch<{ services: Service[] }>("/services")
-      .then((res) => setServices(res.services))
-      .finally(() => setLoading(false));
+      .then((res) => {
+        if (active && res.services && res.services.length > 0) {
+          setServices(res.services);
+        } else if (active) {
+          setServices(DEFAULT_SERVICES);
+        }
+      })
+      .catch(() => {
+        if (active) setServices(DEFAULT_SERVICES);
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+
+    return () => {
+      active = false;
+      clearTimeout(timer);
+    };
   }, []);
 
   return (

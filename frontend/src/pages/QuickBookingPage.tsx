@@ -3,6 +3,7 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { apiFetch, ApiError } from "../api/client";
 import { useAuth } from "../context/AuthContext";
 import { AvailabilitySlot, Service, StaffMember } from "../types";
+import { DEFAULT_SERVICES, DEFAULT_STAFF } from "../constants/fallbackData";
 
 function formatPrice(price: string) {
   return Number(price).toLocaleString("vi-VN") + "đ";
@@ -46,8 +47,32 @@ export function QuickBookingPage() {
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
-    apiFetch<{ services: Service[] }>("/services").then((res) => setServices(res.services));
-    apiFetch<{ staff: StaffMember[] }>("/staff").then((res) => setStaffList(res.staff));
+    let active = true;
+    const timer = setTimeout(() => {
+      if (active) {
+        setServices((prev) => (prev.length > 0 ? prev : DEFAULT_SERVICES));
+        setStaffList((prev) => (prev.length > 0 ? prev : DEFAULT_STAFF));
+      }
+    }, 3000);
+
+    apiFetch<{ services: Service[] }>("/services")
+      .then((res) => {
+        if (active && res.services && res.services.length > 0) setServices(res.services);
+        else if (active) setServices(DEFAULT_SERVICES);
+      })
+      .catch(() => { if (active) setServices(DEFAULT_SERVICES); });
+
+    apiFetch<{ staff: StaffMember[] }>("/staff")
+      .then((res) => {
+        if (active && res.staff && res.staff.length > 0) setStaffList(res.staff);
+        else if (active) setStaffList(DEFAULT_STAFF);
+      })
+      .catch(() => { if (active) setStaffList(DEFAULT_STAFF); });
+
+    return () => {
+      active = false;
+      clearTimeout(timer);
+    };
   }, []);
 
   useEffect(() => {
