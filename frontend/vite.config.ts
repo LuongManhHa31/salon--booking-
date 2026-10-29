@@ -9,7 +9,10 @@ export default defineConfig({
     // Cho phép truy cập qua tunnel tạm thời (vd: trycloudflare.com) khi demo từ xa.
     allowedHosts: true,
     proxy: {
-      "/api": "http://localhost:4000",
+      "/api": {
+        target: process.env.VITE_BACKEND_URL || "https://salon-booking-backend-mv7p.onrender.com",
+        changeOrigin: true,
+      },
     },
   },
 });
