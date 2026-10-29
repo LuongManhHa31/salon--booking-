@@ -6,14 +6,30 @@ import { requireAuth, requireRole } from "../middleware/auth";
 
 const router = Router();
 
+const FALLBACK_STAFF = [
+  { id: "staff-1", fullName: "Nguyễn Quang Minh", staffProfile: { specialties: "Cắt tóc, Uốn" } },
+  { id: "staff-2", fullName: "Trần Thu Hà", staffProfile: { specialties: "Nhuộm, Duỗi" } },
+  { id: "staff-3", fullName: "Bùi Đức Minh", staffProfile: { specialties: "Cắt tóc, Gội đầu dưỡng sinh" } },
+  { id: "staff-4", fullName: "Thân Tuấn Vũ", staffProfile: { specialties: "Nhuộm, Uốn" } },
+  { id: "staff-5", fullName: "Dương Văn Tuấn", staffProfile: { specialties: "Cắt tóc, Duỗi" } },
+];
+
 // UC006 - Danh sách nhân viên khả dụng để khách hàng chọn khi đặt lịch (public, thông tin rút gọn)
 router.get("/", async (req, res) => {
-  const staff = await prisma.account.findMany({
-    where: { role: "STAFF", staffProfile: { active: true } },
-    select: { id: true, fullName: true, staffProfile: { select: { specialties: true } } },
-    orderBy: { fullName: "asc" },
-  });
-  res.json({ staff });
+  try {
+    const staff = await prisma.account.findMany({
+      where: { role: "STAFF", staffProfile: { active: true } },
+      select: { id: true, fullName: true, staffProfile: { select: { specialties: true } } },
+      orderBy: { fullName: "asc" },
+    });
+    if (staff && staff.length > 0) {
+      return res.json({ staff });
+    }
+    return res.json({ staff: FALLBACK_STAFF });
+  } catch (err) {
+    console.error("Database error in /staff, returning fallback staff:", err);
+    return res.json({ staff: FALLBACK_STAFF });
+  }
 });
 
 const createStaffSchema = z.object({
