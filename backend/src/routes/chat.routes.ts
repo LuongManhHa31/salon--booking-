@@ -393,16 +393,78 @@ function setCachedReply(query: string, provider: string, result: any) {
   }
 }
 
+// FAQ tra cứu siêu tốc (< 1ms) không cần chờ mô hình AI xử lý
+function checkInstantFaq(query: string): { reply: string; suggestions: string[]; bookingIntent?: BookingIntent } | null {
+  const q = query.trim().toLowerCase();
+  
+  if (/^(xem )?bảng giá( dịch vụ)?$/i.test(q) || /(bảng giá|giá cả|chi phí|dịch vụ giá|giá dịch vụ)/i.test(q)) {
+    return {
+      reply: "Bảng giá dịch vụ tại Salon:\n• Cắt tóc nam: 80.000đ (30 phút)\n• Cắt tóc nữ: 150.000đ (45 phút)\n• Uốn tóc Hàn Quốc: 350.000đ (90 phút)\n• Nhuộm màu thời trang: 400.000đ (90 phút)\n• Gội đầu dưỡng sinh: 100.000đ (45 phút)\n• Phục hồi Keratin: 300.000đ (60 phút)\n• Lấy ráy tai êm: 50.000đ (20 phút)",
+      suggestions: ["Đặt lịch ngay", "Gợi ý kiểu tóc", "Tư vấn thợ cắt"],
+    };
+  }
+
+  if (/chính sách hủy/i.test(q) || /(hủy lịch|đổi lịch)/i.test(q)) {
+    return {
+      reply: "Chính sách salon: Bạn có thể hủy hoặc đổi lịch hẹn miễn phí trước giờ hẹn tối thiểu 2 giờ trực tiếp trên website. Nếu dưới 2 giờ trước giờ hẹn, vui lòng liên hệ hotline 0345607361 để được hỗ trợ.",
+      suggestions: ["Xem bảng giá dịch vụ", "Đặt lịch ngay"],
+    };
+  }
+
+  if (/^tôi muốn cắt tóc$/i.test(q) || /^muốn cắt tóc$/i.test(q)) {
+    return {
+      reply: "Salon có dịch vụ Cắt tóc nam (80.000đ/30p) và Cắt tóc nữ (150.000đ/45p) theo dáng khuôn mặt. Bạn muốn cắt tóc nam hay nữ và dự định đi vào khung giờ nào để mình kiểm tra thợ trống cho bạn nhé?",
+      suggestions: ["Cắt tóc nam", "Cắt tóc nữ", "Xem bảng giá dịch vụ"],
+    };
+  }
+
+  if (/^đặt lịch nhanh$/i.test(q) || /cách đặt lịch/i.test(q)) {
+    return {
+      reply: "Để đặt lịch nhanh không cần tạo tài khoản, bạn chỉ cần chọn dịch vụ, chọn stylist và khung giờ yêu thích, sau đó xác nhận qua mã OTP gửi về số điện thoại là xong!",
+      suggestions: ["Xem bảng giá dịch vụ", "Tôi muốn cắt tóc"],
+    };
+  }
+
+  if (/(ở đâu|địa chỉ|vị trí|salon nằm ở đâu)/i.test(q)) {
+    return {
+      reply: "Salon tóc AI Booking tọa lạc tại Số 20 đường Hoàng Văn Thụ, thành phố Thái Nguyên, Việt Nam. Hotline/Zalo hỗ trợ: 0345607361.",
+      suggestions: ["Xem bảng giá dịch vụ", "Giờ mở cửa", "Đặt lịch ngay"],
+    };
+  }
+
+  if (/(mấy giờ mở|giờ mở cửa|giờ hoạt động|mấy giờ đóng)/i.test(q)) {
+    return {
+      reply: `Salon mở cửa phục vụ từ ${SALON_OPEN_HOUR}:00 sáng đến ${SALON_CLOSE_HOUR}:00 tối tất cả các ngày trong tuần (kể cả Thứ 7 và Chủ nhật).`,
+      suggestions: ["Đặt lịch ngay", "Xem bảng giá dịch vụ"],
+    };
+  }
+
+  if (/(chủ salon|người sáng lập|anh lương|ai làm chủ)/i.test(q)) {
+    return {
+      reply: "Người sáng lập và làm chủ Salon tóc AI Booking là anh Lương. Salon luôn mong muốn mang đến trải nghiệm làm tóc chuyên nghiệp và ứng dụng công nghệ tốt nhất cho bạn!",
+      suggestions: ["Xem bảng giá dịch vụ", "Tôi muốn cắt tóc"],
+    };
+  }
+
+  return null;
+}
+
 async function chatWithGemini(
   userMessages: { role: "user" | "assistant"; content: string }[],
   modelOverride?: string
 ) {
-  const { history, lastUserMessage } = sanitizeConversation(userMessages, 6);
+  const { history, lastUserMessage } = sanitizeConversation(userMessages, 4);
   if (!lastUserMessage) {
     return { reply: "Bạn muốn tìm hiểu thêm thông tin gì về salon ạ?", handoff: false, suggestions: [] };
   }
 
-  // Tối ưu siêu tốc: Nếu là câu hỏi độc lập (hoặc lặp lại) và đã có trong cache, trả về ngay (<1ms)
+  // 1. Kiểm tra FAQ siêu tốc (<1ms)
+  const instantAnswer = checkInstantFaq(lastUserMessage);
+  if (instantAnswer) {
+    return { ...instantAnswer, handoff: false };
+  }
+
+  // 2. Tối ưu siêu tốc: Nếu là câu hỏi lặp lại và đã có trong cache, trả về ngay (<1ms)
   if (history.length === 0) {
     const cached = getCachedReply(lastUserMessage, "gemini");
     if (cached) return cached;
@@ -598,8 +660,9 @@ router.post("/", async (req, res) => {
       if (!geminiAvailable) {
         return res.status(503).json({ message: "Chưa cấu hình GEMINI_API_KEY, không thể sử dụng Gemini" });
       }
-      const result = await chatWithGemini(parsed.data.messages, requestedModel);
-      return res.json({ ...result, provider: "gemini", model: requestedModel || GEMINI_CHAT_MODEL });
+      const geminiModel = requestedModel && requestedModel.startsWith("gemini") ? requestedModel : GEMINI_CHAT_MODEL;
+      const result = await chatWithGemini(parsed.data.messages, geminiModel);
+      return res.json({ ...result, provider: "gemini", model: geminiModel });
     }
 
     if (targetProvider === "anthropic") {

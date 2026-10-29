@@ -69,8 +69,10 @@ export function ChatWidget() {
           if (data.activeProvider) {
             setProvider(data.activeProvider as any);
           }
-          if (data.providers.llama?.model) {
+          if (data.activeProvider === "llama" && data.providers.llama?.model) {
             setModel(data.providers.llama.model);
+          } else {
+            setModel("gemini-2.5-flash-lite");
           }
         })
         .catch(() => {
@@ -186,7 +188,15 @@ export function ChatWidget() {
               <span className="text-gray-500 font-medium">Model:</span>
               <select
                 value={provider}
-                onChange={(e) => setProvider(e.target.value as any)}
+                onChange={(e) => {
+                  const p = e.target.value as any;
+                  setProvider(p);
+                  if (p === "llama") {
+                    setModel(aiStatus?.providers.llama?.model || "llama3.1:8b");
+                  } else {
+                    setModel("gemini-2.5-flash-lite");
+                  }
+                }}
                 className="bg-white border border-gray-300 rounded px-2 py-0.5 text-xs text-gray-700 focus:outline-none focus:ring-1 focus:ring-brand-500 font-medium"
               >
                 <option value="llama">🦙 Llama 3.1 8B (Local)</option>
