@@ -1,6 +1,7 @@
 import { GoogleGenAI } from "@google/genai";
 
-export const GEMINI_CHAT_MODEL = "gemini-3.5-flash-lite";
+export const GEMINI_CHAT_MODEL = process.env.GEMINI_MODEL || "gemini-2.5-flash";
+export const GEMINI_FALLBACK_CHAT_MODEL = "gemini-2.5-flash-lite";
 
 // GEMINI_API_KEY có thể chứa nhiều key cách nhau bằng dấu phẩy (mỗi key từ một tài khoản Google
 // khác nhau có quota free-tier riêng). Khi một key bị lỗi hết quota, withGemini() tự động thử
@@ -27,14 +28,18 @@ function getClientForKey(key: string): GoogleGenAI {
   return client;
 }
 
-function isQuotaExceededError(err: unknown): boolean {
+function isQuotaOrTransientError(err: unknown): boolean {
   const status = (err as { status?: number })?.status;
   const message = err instanceof Error ? err.message : String(err);
-  return status === 429 || /RESOURCE_EXHAUSTED|exceeded your current quota/i.test(message);
+  return (
+    status === 429 ||
+    status === 503 ||
+    /RESOURCE_EXHAUSTED|exceeded your current quota|high demand|UNAVAILABLE/i.test(message)
+  );
 }
 
 // Chạy một thao tác Gemini, tự động xoay qua key tiếp theo trong GEMINI_API_KEY nếu key hiện tại
-// báo lỗi hết quota (429). Với lỗi khác (không phải quota), dừng ngay và ném lỗi ra luôn.
+// báo lỗi hết quota (429) hoặc tạm thời quá tải (503).
 export async function withGemini<T>(operation: (client: GoogleGenAI) => Promise<T>): Promise<T> {
   const keys = getApiKeys();
   if (keys.length === 0) {
@@ -47,9 +52,9 @@ export async function withGemini<T>(operation: (client: GoogleGenAI) => Promise<
       return await operation(getClientForKey(keys[i]));
     } catch (err) {
       lastError = err;
-      if (!isQuotaExceededError(err)) throw err;
+      if (!isQuotaOrTransientError(err)) throw err;
       if (i < keys.length - 1) {
-        console.warn(`Gemini key #${i + 1} hết quota, chuyển sang key #${i + 2}/${keys.length}`);
+        console.warn(`Gemini key #${i + 1} gặp sự cố quota/503, chuyển sang key #${i + 2}/${keys.length}`);
       }
     }
   }

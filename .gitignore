@@ -2,3 +2,14 @@ node_modules/
 dist/
 .env
 *.local
+
+# Build artifacts & temp files
+*.pptx
+*.zip
+/latex_*
+/temp_*
+/test_*.png
+/docx_*.txt
+/teacher_sample_toc.txt
+/extracted_docx_data.json
+

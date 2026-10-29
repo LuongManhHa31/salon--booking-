@@ -103,6 +103,8 @@ export interface ChatMessage {
   role: "user" | "assistant";
   content: string;
   bookingIntent?: { staffId?: string; serviceIds?: string; date?: string; time?: string };
+  provider?: string;
+  model?: string;
 }
 
 export interface ReportSummary {

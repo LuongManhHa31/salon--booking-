@@ -25,8 +25,14 @@ async function buildIndex(): Promise<IndexedChunk[]> {
     return chunks.map((c) => ({ ...c, vector: null }));
   }
 
-  const vectors = await embedTexts(chunks.map((c) => c.text));
-  return chunks.map((c, i) => ({ ...c, vector: vectors[i] ?? null }));
+  try {
+    const vectors = await embedTexts(chunks.map((c) => c.text));
+    console.log(`[RAG] Đã vector hoá thành công ${vectors.length} đoạn tri thức với Gemini Embedding.`);
+    return chunks.map((c, i) => ({ ...c, vector: vectors[i] ?? null }));
+  } catch (err) {
+    console.error("[RAG] Lỗi khi tạo embeddings cho knowledge base, dùng fallback keyword:", err);
+    return chunks.map((c) => ({ ...c, vector: null }));
+  }
 }
 
 function getIndex(): Promise<IndexedChunk[]> {
@@ -52,21 +58,46 @@ function keywordScore(query: string, text: string): number {
   return score;
 }
 
-// Phase 2 (Retrieval): trả về Top-K đoạn tri thức liên quan nhất tới câu hỏi của khách hàng,
-// dùng Dense Retrieval (cosine similarity) khi có embedding, ngược lại dùng Keyword Retrieval.
+// Phase 2 (Retrieval): trả về Top-K đoạn tri thức liên quan nhất tới câu hỏi của khách hàng.
+// Tối ưu tốc độ: Ưu tiên Keyword Retrieval siêu tốc cục bộ (<0.5ms). Nếu tìm thấy đoạn liên quan,
+// trả về ngay mà KHÔNG mất 2-3s gọi API mạng. Chỉ gọi Dense Retrieval (Gemini Embedding) khi hoàn toàn không có từ khóa trùng.
 export async function retrieveContext(query: string, k = 3): Promise<string[]> {
   const index = await getIndex();
   if (index.length === 0) return [];
 
-  let scored: { chunk: IndexedChunk; score: number }[];
-
-  // Bỏ qua Dense Retrieval (gọi API embedding) để tiết kiệm ~1-2 giây phản hồi,
-  // chỉ dùng Keyword Retrieval cục bộ siêu nhanh vì dữ liệu knowledge base rất nhỏ.
-  scored = index.map((chunk) => ({ chunk, score: keywordScore(query, chunk.text) }));
-
-  return scored
+  // 1. Keyword Retrieval siêu tốc (<0.5ms trong bộ nhớ)
+  const scoredKeyword = index
+    .map((chunk) => ({ chunk, score: keywordScore(query, chunk.text) }))
     .filter((s) => s.score > 0)
-    .sort((a, b) => b.score - a.score)
-    .slice(0, k)
-    .map((s) => `[${s.chunk.sourceTitle}] ${s.chunk.text}`);
+    .sort((a, b) => b.score - a.score);
+
+  // Nếu câu hỏi khớp từ khóa (dù chỉ 1 từ liên quan), dùng ngay kết quả này để phản hồi lập tức
+  if (scoredKeyword.length > 0) {
+    return scoredKeyword.slice(0, k).map((s) => `[${s.chunk.sourceTitle}] ${s.chunk.text}`);
+  }
+
+  // 2. Dense Retrieval (Gemini Embedding) chỉ khi không tìm thấy từ khóa nào và câu hỏi đủ dài
+  if (isEmbeddingAvailable() && query.trim().length >= 15) {
+    try {
+      const queryVector = await embedQuery(query);
+      if (queryVector.length > 0) {
+        const denseScored = index
+          .filter((chunk) => chunk.vector && chunk.vector.length > 0)
+          .map((chunk) => ({
+            chunk,
+            score: cosineSimilarity(queryVector, chunk.vector!),
+          }))
+          .filter((item) => item.score >= 0.5)
+          .sort((a, b) => b.score - a.score);
+
+        if (denseScored.length > 0) {
+          return denseScored.slice(0, k).map((s) => `[${s.chunk.sourceTitle}] ${s.chunk.text}`);
+        }
+      }
+    } catch (err) {
+      console.warn("[RAG] Lỗi tính similarity với Gemini embeddings:", err);
+    }
+  }
+
+  return [];
 }

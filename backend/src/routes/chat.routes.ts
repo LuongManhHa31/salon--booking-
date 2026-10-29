@@ -4,7 +4,8 @@ import Anthropic from "@anthropic-ai/sdk";
 import type { Content, FunctionDeclaration } from "@google/genai";
 import { prisma } from "../prisma";
 import { getAnthropicClient, CHAT_MODEL } from "../utils/anthropic";
-import { withGemini, isGeminiConfigured, GEMINI_CHAT_MODEL } from "../utils/gemini";
+import { withGemini, isGeminiConfigured, GEMINI_CHAT_MODEL, GEMINI_FALLBACK_CHAT_MODEL } from "../utils/gemini";
+import { callOllamaChat, checkLlamaHealth, getLlamaModel } from "../utils/llama";
 import { computeAvailableSlots } from "../utils/availability";
 import { SALON_OPEN_HOUR, SALON_CLOSE_HOUR } from "../utils/schedule";
 import { retrieveContext } from "../rag/retriever";
@@ -14,8 +15,9 @@ const router = Router();
 const chatSchema = z.object({
   messages: z
     .array(z.object({ role: z.enum(["user", "assistant"]), content: z.string().min(1) }))
-    .min(1)
-    .max(30),
+    .min(1),
+  provider: z.enum(["llama", "gemini", "anthropic", "auto"]).optional(),
+  model: z.string().optional(),
 });
 
 const HANDOFF_MARKER = "[HANDOFF]";
@@ -50,6 +52,27 @@ type ActiveService = Awaited<ReturnType<typeof prisma.service.findMany>>[number]
 type StaffAccount = Awaited<ReturnType<typeof prisma.account.findMany>>[number] & { staffProfile: { specialties: string | null } | null };
 type ActiveHairstyle = Awaited<ReturnType<typeof prisma.hairstyle.findMany>>[number];
 
+let cachedMetadata: {
+  services: ActiveService[];
+  staffList: StaffAccount[];
+  hairstyles: ActiveHairstyle[];
+  timestamp: number;
+} | null = null;
+
+async function getSalonMetadata() {
+  const now = Date.now();
+  if (cachedMetadata && now - cachedMetadata.timestamp < 60000) {
+    return cachedMetadata;
+  }
+  const [services, staffList, hairstyles] = await Promise.all([
+    prisma.service.findMany({ where: { isActive: true } }),
+    prisma.account.findMany({ where: { role: "STAFF", staffProfile: { active: true } }, include: { staffProfile: true } }),
+    prisma.hairstyle.findMany(),
+  ]);
+  cachedMetadata = { services, staffList, hairstyles, timestamp: now };
+  return cachedMetadata;
+}
+
 function buildSystemPrompt(
   services: ActiveService[], 
   contextChunks: string[], 
@@ -79,7 +102,7 @@ ${contextChunks.map((c) => `- ${c}`).join("\n")}\n`
       : "";
 
   return `Bạn là trợ lý ảo của Salon tóc AI Booking, trả lời bằng tiếng Việt. 
-BẮT BUỘC TRẢ LỜI CỰC KỲ NGẮN GỌN VÀ SÚC TÍCH (DƯỚI 30 TỪ). Việc trả lời ngắn giúp hệ thống phản hồi cực nhanh trong 1 giây.
+Trả lời ngắn gọn, thân thiện, rõ ràng và đầy đủ ý (khoảng 30-80 từ). Sử dụng thông tin từ tài liệu chính sách của salon khi trả lời câu hỏi liên quan.
 Trả lời bằng văn bản thuần, KHÔNG dùng cú pháp markdown (không dùng **, #, gạch đầu dòng, code block) vì
 khung chat chỉ hiển thị chữ thường.
 Salon mở cửa ${SALON_OPEN_HOUR}:00 - ${SALON_CLOSE_HOUR}:00 mỗi ngày. Hôm nay là ${new Date().toISOString().slice(0, 10)}.
@@ -115,8 +138,7 @@ Trong đó:
 - date: Ngày khách chọn (YYYY-MM-DD, nếu không có điền NONE)
 - time: Giờ khách chọn (định dạng HH:mm, ví dụ 09:00, nếu không có điền NONE)
 Ví dụ: [BOOK_NOW;cuid123;cuid456;2026-09-24;09:00]
-Điều này sẽ ra lệnh cho giao diện tự động đặt lịch với đúng giờ khách đã chọn.
-Điều này sẽ ra lệnh cho giao diện hiển thị nút Đặt lịch trực tiếp.`;
+Điều này sẽ ra lệnh cho giao diện tự động hiển thị nút Đặt lịch với đúng thông tin khách đã chọn.`;
 }
 
 function extractHandoff(text: string): { reply: string; handoff: boolean } {
@@ -201,9 +223,94 @@ const anthropicSlotsTool: Anthropic.Tool = {
   },
 };
 
+/**
+ * Chuẩn hóa lịch sử hội thoại cho các mô hình AI:
+ * - Loại bỏ giới hạn 15 lần nhập: xử lý mượt mà mọi độ dài lịch sử chat (kể cả 50-100 tin nhắn).
+ * - Tự động loại bỏ tin nhắn chào mở đầu của assistant để history luôn bắt đầu bằng 'user'.
+ * - Gộp các tin nhắn liên tiếp cùng vai trò và đảm bảo vai trò xen kẽ chuẩn xác: user -> model/assistant -> user...
+ * - Cắt cửa sổ trượt (sliding window) tối đa maxTurns cặp hội thoại gần nhất giúp tốc độ phản hồi nhanh hơn gấp 2-3 lần và không bao giờ bị lỗi tràn token hay lỗi thứ tự vai trò (First content must be user).
+ * - history trả về cho Gemini luôn kết thúc bằng 'model', để lượt gửi tiếp theo là 'user' (lastUserMessage).
+ */
+function sanitizeConversation(
+  rawMessages: Array<{ role: "user" | "assistant"; content: string }>,
+  maxTurns = 8
+) {
+  let lastUserIdx = -1;
+  for (let i = rawMessages.length - 1; i >= 0; i--) {
+    if (rawMessages[i].role === "user") {
+      lastUserIdx = i;
+      break;
+    }
+  }
+
+  if (lastUserIdx === -1) {
+    return {
+      history: [] as Content[],
+      lastUserMessage: "",
+      normalizedMessages: [] as Array<{ role: "user" | "assistant"; content: string }>,
+    };
+  }
+
+  const lastUserMessage = rawMessages[lastUserIdx].content.trim();
+  const past = rawMessages.slice(0, lastUserIdx);
+
+  // Bỏ tin nhắn chào của assistant ở đầu
+  let startIdx = 0;
+  while (startIdx < past.length && past[startIdx].role === "assistant") {
+    startIdx++;
+  }
+  const filteredPast = past.slice(startIdx);
+
+  // Gộp tin nhắn liên tiếp cùng vai trò
+  const mergedPast: Array<{ role: "user" | "assistant"; content: string }> = [];
+  for (const m of filteredPast) {
+    const content = m.content.trim();
+    if (!content) continue;
+    if (mergedPast.length > 0 && mergedPast[mergedPast.length - 1].role === m.role) {
+      mergedPast[mergedPast.length - 1].content += "\n" + content;
+    } else {
+      mergedPast.push({ role: m.role, content });
+    }
+  }
+
+  // Cắt sliding window: giữ tối đa maxTurns * 2 tin nhắn gần nhất
+  let windowed = mergedPast;
+  if (windowed.length > maxTurns * 2) {
+    windowed = windowed.slice(-(maxTurns * 2));
+    while (windowed.length > 0 && windowed[0].role === "assistant") {
+      windowed.shift();
+    }
+  }
+
+  // Vì tin nhắn sắp gửi tới chat.sendMessage là lượt của user (lastUserMessage),
+  // history trước đó bắt buộc phải kết thúc bằng model/assistant
+  if (windowed.length > 0 && windowed[windowed.length - 1].role === "user") {
+    windowed.pop();
+  }
+
+  const history: Content[] = windowed.map((m) => ({
+    role: m.role === "assistant" ? "model" : "user",
+    parts: [{ text: m.content }],
+  }));
+
+  const normalizedMessages: Array<{ role: "user" | "assistant"; content: string }> = [
+    ...windowed,
+    { role: "user", content: lastUserMessage },
+  ];
+
+  return {
+    history,
+    lastUserMessage,
+    normalizedMessages,
+  };
+}
+
 async function chatWithAnthropic(userMessages: { role: "user" | "assistant"; content: string }[]) {
   const client = getAnthropicClient();
-  const lastUserMessage = [...userMessages].reverse().find((m) => m.role === "user")?.content ?? "";
+  const { normalizedMessages, lastUserMessage } = sanitizeConversation(userMessages, 6);
+  if (!lastUserMessage) {
+    return { reply: "Bạn muốn tìm hiểu thêm thông tin gì về salon ạ?", handoff: false, suggestions: [] };
+  }
   const [contextChunks, services, staffList, hairstyles] = await Promise.all([
     retrieveContext(lastUserMessage),
     prisma.service.findMany({ where: { isActive: true } }),
@@ -211,12 +318,12 @@ async function chatWithAnthropic(userMessages: { role: "user" | "assistant"; con
     prisma.hairstyle.findMany(),
   ]);
   const systemPrompt = buildSystemPrompt(services, contextChunks, staffList, hairstyles);
-  const messages: Anthropic.MessageParam[] = userMessages.map((m) => ({ role: m.role, content: m.content }));
+  const messages: Anthropic.MessageParam[] = normalizedMessages.map((m) => ({ role: m.role, content: m.content }));
 
   for (let iteration = 0; iteration < 3; iteration++) {
     const response = await client.messages.create({
       model: CHAT_MODEL,
-      max_tokens: 300,
+      max_tokens: 250,
       system: systemPrompt,
       tools: [anthropicSlotsTool],
       messages,
@@ -263,8 +370,119 @@ const geminiSlotsTool: FunctionDeclaration = {
   },
 };
 
-async function chatWithGemini(userMessages: { role: "user" | "assistant"; content: string }[]) {
-  const lastUserMessage = [...userMessages].reverse().find((m) => m.role === "user")?.content ?? "";
+// Cache các câu trả lời cho các câu hỏi phổ biến hoặc lặp lại (TTL 5 phút)
+const queryResponseCache = new Map<string, { result: any; timestamp: number }>();
+
+function getCachedReply(query: string, provider: string): any | null {
+  const key = `${provider}:${query.trim().toLowerCase()}`;
+  const item = queryResponseCache.get(key);
+  if (item && Date.now() - item.timestamp < 300000) {
+    return item.result;
+  }
+  return null;
+}
+
+function setCachedReply(query: string, provider: string, result: any) {
+  // Không cache nếu có booking intent cụ thể vì giờ giấc lịch hẹn cần realtime
+  if (result.bookingIntent?.time || result.bookingIntent?.date) return;
+  const key = `${provider}:${query.trim().toLowerCase()}`;
+  queryResponseCache.set(key, { result, timestamp: Date.now() });
+  if (queryResponseCache.size > 100) {
+    const firstKey = queryResponseCache.keys().next().value;
+    if (firstKey) queryResponseCache.delete(firstKey);
+  }
+}
+
+async function chatWithGemini(
+  userMessages: { role: "user" | "assistant"; content: string }[],
+  modelOverride?: string
+) {
+  const { history, lastUserMessage } = sanitizeConversation(userMessages, 6);
+  if (!lastUserMessage) {
+    return { reply: "Bạn muốn tìm hiểu thêm thông tin gì về salon ạ?", handoff: false, suggestions: [] };
+  }
+
+  // Tối ưu siêu tốc: Nếu là câu hỏi độc lập (hoặc lặp lại) và đã có trong cache, trả về ngay (<1ms)
+  if (history.length === 0) {
+    const cached = getCachedReply(lastUserMessage, "gemini");
+    if (cached) return cached;
+  }
+
+  const [contextChunks, metadata] = await Promise.all([
+    retrieveContext(lastUserMessage),
+    getSalonMetadata(),
+  ]);
+  const systemPrompt = buildSystemPrompt(metadata.services, contextChunks, metadata.staffList, metadata.hairstyles);
+
+  // Tối ưu tốc độ: Chỉ nhúng Function Tool khi khách hàng thực sự hỏi về lịch trống / đặt giờ
+  const isPolicyOrGeneralQuestion = /(chính sách|hủy lịch|đổi lịch|thanh toán|bảo mật|ở đâu|địa chỉ|chủ salon|anh lương|review|đánh giá)/i.test(lastUserMessage);
+  const needsSlotTool = !isPolicyOrGeneralQuestion && /(khung giờ|mấy giờ|giờ nào|còn trống|còn rảnh|đặt lịch|tìm lịch|slot)/i.test(lastUserMessage);
+
+  const chosenModel = modelOverride || GEMINI_CHAT_MODEL;
+
+  const text = await withGemini(async (client) => {
+    async function executeChat(modelName: string): Promise<string> {
+      const config: any = {
+        systemInstruction: systemPrompt,
+        thinkingConfig: { thinkingBudget: 0 },
+        maxOutputTokens: 250, // Giới hạn token đầu ra vừa đủ để phản hồi siêu nhanh trong < 1.5s
+        temperature: 0.4, // Phản hồi tập trung, chính xác và nhanh hơn
+      };
+      if (needsSlotTool) {
+        config.tools = [{ functionDeclarations: [geminiSlotsTool] }];
+      }
+
+      const chat = client.chats.create({
+        model: modelName,
+        config,
+        history,
+      });
+
+      let response = await chat.sendMessage({ message: lastUserMessage });
+
+      if (needsSlotTool) {
+        for (let iteration = 0; iteration < 2; iteration++) {
+          const calls = response.functionCalls;
+          if (!calls || calls.length === 0) break;
+
+          const call = calls[0];
+          const result = await runGetAvailableSlots(call.args as unknown as SlotToolInput);
+          response = await chat.sendMessage({
+            message: [{ functionResponse: { name: call.name ?? "get_available_slots", response: result } }],
+          });
+        }
+      }
+
+      return (response.text ?? "").trim();
+    }
+
+    try {
+      return await executeChat(chosenModel);
+    } catch (err: any) {
+      if (err?.status === 503 || /high demand|UNAVAILABLE/i.test(err?.message || "")) {
+        console.warn(`Model ${chosenModel} quá tải (503), tự động chuyển sang ${GEMINI_FALLBACK_CHAT_MODEL}...`);
+        return await executeChat(GEMINI_FALLBACK_CHAT_MODEL);
+      }
+      throw err;
+    }
+  });
+
+  const parsed = parseAssistantReply(text);
+  if (history.length === 0) {
+    setCachedReply(lastUserMessage, "gemini", parsed);
+  }
+  return parsed;
+}
+
+async function chatWithLlama(
+  userMessages: { role: "user" | "assistant"; content: string }[],
+  modelOverride?: string
+) {
+  const { normalizedMessages, lastUserMessage } = sanitizeConversation(userMessages, 6);
+  if (!lastUserMessage) {
+    return { reply: "Bạn muốn tìm hiểu thêm thông tin gì về salon ạ?", handoff: false, suggestions: [] };
+  }
+
   const [contextChunks, services, staffList, hairstyles] = await Promise.all([
     retrieveContext(lastUserMessage),
     prisma.service.findMany({ where: { isActive: true } }),
@@ -273,62 +491,126 @@ async function chatWithGemini(userMessages: { role: "user" | "assistant"; conten
   ]);
   const systemPrompt = buildSystemPrompt(services, contextChunks, staffList, hairstyles);
 
-  const history: Content[] = userMessages.slice(0, -1).map((m) => ({
-    role: m.role === "assistant" ? "model" : "user",
-    parts: [{ text: m.content }],
-  }));
-  const lastMessage = userMessages[userMessages.length - 1].content;
-
-  // Toàn bộ phiên chat (kể cả vòng lặp gọi tool) chạy trong withGemini để nếu key hiện tại hết
-  // quota giữa chừng, tự làm lại từ đầu với key tiếp theo thay vì lỗi luôn.
-  const text = await withGemini(async (client) => {
-    const chat = client.chats.create({
-      model: GEMINI_CHAT_MODEL,
-      config: {
-        systemInstruction: systemPrompt,
-        tools: [{ functionDeclarations: [geminiSlotsTool] }],
-        maxOutputTokens: 2048,
-      },
-      history,
-    });
-
-    let response = await chat.sendMessage({ message: lastMessage });
-
-    for (let iteration = 0; iteration < 3; iteration++) {
-      const calls = response.functionCalls;
-      if (!calls || calls.length === 0) break;
-
-      const call = calls[0];
-      const result = await runGetAvailableSlots(call.args as unknown as SlotToolInput);
-      response = await chat.sendMessage({
-        message: [{ functionResponse: { name: call.name ?? "get_available_slots", response: result } }],
-      });
-    }
-
-    console.log("DEBUG GEMINI RESPONSE:", JSON.stringify(response, null, 2));
-    return (response.text ?? "").trim();
+  const text = await callOllamaChat({
+    model: modelOverride,
+    systemPrompt,
+    messages: normalizedMessages,
+    onExecuteTool: async (name, args) => {
+      if (name === "get_available_slots") {
+        return runGetAvailableSlots(args as SlotToolInput);
+      }
+      return { error: "Không hỗ trợ công cụ này" };
+    },
   });
 
   return parseAssistantReply(text);
 }
 
+// Kiểm tra trạng thái các nhà cung cấp AI (Llama, Gemini, Claude)
+router.get("/status", async (_req, res) => {
+  const llamaHealth = await checkLlamaHealth();
+  const geminiOk = isGeminiConfigured();
+  const anthropicOk = Boolean(process.env.ANTHROPIC_API_KEY);
+
+  let defaultProvider = "gemini";
+  if (process.env.AI_PROVIDER && process.env.AI_PROVIDER !== "auto") {
+    defaultProvider = process.env.AI_PROVIDER;
+  } else {
+    if (llamaHealth.available) {
+      defaultProvider = "llama";
+    } else if (geminiOk) {
+      defaultProvider = "gemini";
+    } else if (anthropicOk) {
+      defaultProvider = "anthropic";
+    }
+  }
+
+  return res.json({
+    activeProvider: defaultProvider,
+    providers: {
+      llama: {
+        available: llamaHealth.available,
+        model: llamaHealth.activeModel,
+        baseUrl: llamaHealth.baseUrl,
+        installedModels: llamaHealth.installedModels,
+        error: llamaHealth.error,
+      },
+      gemini: {
+        available: geminiOk,
+      },
+      anthropic: {
+        available: anthropicOk,
+      },
+    },
+  });
+});
+
 // UC019 - Chatbot tư vấn dịch vụ và khung giờ phù hợp bằng ngôn ngữ tự nhiên
-// Ưu tiên Gemini nếu đã cấu hình GEMINI_API_KEY, ngược lại dùng Claude (ANTHROPIC_API_KEY).
+// Hỗ trợ Llama 3.1 8B (cục bộ qua Ollama), Google Gemini, hoặc Claude (Anthropic).
 router.post("/", async (req, res) => {
   const parsed = chatSchema.safeParse(req.body);
   if (!parsed.success) {
     return res.status(400).json({ message: "Nội dung trò chuyện không hợp lệ" });
   }
 
-  const useGemini = isGeminiConfigured();
-  const useAnthropic = !useGemini && Boolean(process.env.ANTHROPIC_API_KEY);
-  if (!useGemini && !useAnthropic) {
-    return res.status(503).json({ message: "Chưa cấu hình GEMINI_API_KEY hoặc ANTHROPIC_API_KEY, không thể sử dụng chatbot" });
+  const requestedProvider = parsed.data.provider || process.env.AI_PROVIDER || "auto";
+  const requestedModel = parsed.data.model;
+
+  const geminiAvailable = isGeminiConfigured();
+  const anthropicAvailable = Boolean(process.env.ANTHROPIC_API_KEY);
+
+  let targetProvider = requestedProvider;
+  if (targetProvider === "auto") {
+    const llamaCheck = await checkLlamaHealth();
+    if (llamaCheck.available) {
+      targetProvider = "llama";
+    } else if (geminiAvailable) {
+      targetProvider = "gemini";
+    } else if (anthropicAvailable) {
+      targetProvider = "anthropic";
+    } else {
+      targetProvider = "gemini";
+    }
   }
 
   try {
-    const result = useGemini ? await chatWithGemini(parsed.data.messages) : await chatWithAnthropic(parsed.data.messages);
-    return res.json(result);
+    if (targetProvider === "llama") {
+      try {
+        const result = await chatWithLlama(parsed.data.messages, requestedModel);
+        return res.json({ ...result, provider: "llama", model: requestedModel || getLlamaModel() });
+      } catch (llamaErr: any) {
+        console.warn("Llama/Ollama không khả dụng:", llamaErr?.message);
+        // Tự động fallback sang Gemini nếu có cấu hình Gemini
+        if (geminiAvailable) {
+          console.log("Ollama chưa bật, tự động fallback sang Gemini...");
+          const result = await chatWithGemini(parsed.data.messages);
+          return res.json({ ...result, provider: "gemini", model: GEMINI_CHAT_MODEL });
+        }
+        return res.status(503).json({
+          message:
+            `Không thể kết nối tới mô hình Llama cục bộ (${llamaErr?.message || "Ollama chưa hoạt động"}). ` +
+            `Vui lòng khởi động Ollama bằng lệnh: 'ollama run llama3.1:8b' hoặc chuyển sang dùng Gemini.`,
+        });
+      }
+    }
+
+    if (targetProvider === "gemini") {
+      if (!geminiAvailable) {
+        return res.status(503).json({ message: "Chưa cấu hình GEMINI_API_KEY, không thể sử dụng Gemini" });
+      }
+      const result = await chatWithGemini(parsed.data.messages, requestedModel);
+      return res.json({ ...result, provider: "gemini", model: requestedModel || GEMINI_CHAT_MODEL });
+    }
+
+    if (targetProvider === "anthropic") {
+      if (!anthropicAvailable) {
+        return res.status(503).json({ message: "Chưa cấu hình ANTHROPIC_API_KEY, không thể sử dụng Claude" });
+      }
+      const result = await chatWithAnthropic(parsed.data.messages);
+      return res.json({ ...result, provider: "anthropic" });
+    }
+
+    return res.status(400).json({ message: `Nhà cung cấp AI '${targetProvider}' không được hỗ trợ.` });
   } catch (err) {
     console.error("Lỗi chatbot:", err);
     res.status(502).json({ message: "Chatbot đang gặp sự cố, vui lòng thử lại sau" });
