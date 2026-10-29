@@ -5,6 +5,7 @@ import { prisma } from "../prisma";
 import { signToken } from "../utils/jwt";
 import { requireAuth } from "../middleware/auth";
 import { generateOtpCode, otpExpiryDate } from "../utils/otp";
+import { withDbTimeout } from "../utils/dbTimeout";
 
 const router = Router();
 
@@ -61,9 +62,12 @@ router.post("/login", async (req, res) => {
   const { identifier, password } = parsed.data;
 
   try {
-    const account = await prisma.account.findFirst({
-      where: { OR: [{ phone: identifier }, { email: identifier }] },
-    });
+    const account = await withDbTimeout(
+      prisma.account.findFirst({
+        where: { OR: [{ phone: identifier }, { email: identifier }] },
+      }),
+      2000
+    );
     if (account && account.passwordHash) {
       if (account.locked) {
         return res.status(403).json({ message: "Tài khoản của bạn đã bị khoá, vui lòng liên hệ salon" });

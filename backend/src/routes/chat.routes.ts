@@ -9,6 +9,7 @@ import { callOllamaChat, checkLlamaHealth, getLlamaModel } from "../utils/llama"
 import { computeAvailableSlots } from "../utils/availability";
 import { SALON_OPEN_HOUR, SALON_CLOSE_HOUR } from "../utils/schedule";
 import { retrieveContext } from "../rag/retriever";
+import { withDbTimeout } from "../utils/dbTimeout";
 
 const router = Router();
 
@@ -66,11 +67,14 @@ async function getSalonMetadata() {
     return cachedMetadata;
   }
   try {
-    const [services, staffList, hairstyles] = await Promise.all([
-      prisma.service.findMany({ where: { isActive: true } }),
-      prisma.account.findMany({ where: { role: "STAFF", staffProfile: { active: true } }, include: { staffProfile: true } }),
-      prisma.hairstyle.findMany(),
-    ]);
+    const [services, staffList, hairstyles] = await withDbTimeout(
+      Promise.all([
+        prisma.service.findMany({ where: { isActive: true } }),
+        prisma.account.findMany({ where: { role: "STAFF", staffProfile: { active: true } }, include: { staffProfile: true } }),
+        prisma.hairstyle.findMany(),
+      ]),
+      2000
+    );
     if (services.length > 0) {
       cachedMetadata = { services, staffList, hairstyles, timestamp: now };
       return cachedMetadata;

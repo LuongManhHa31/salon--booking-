@@ -2,6 +2,7 @@ import { Router } from "express";
 import { z } from "zod";
 import { prisma } from "../prisma";
 import { requireAuth, requireRole } from "../middleware/auth";
+import { withDbTimeout } from "../utils/dbTimeout";
 
 const router = Router();
 
@@ -19,10 +20,13 @@ const FALLBACK_SERVICES = [
 router.get("/", async (req, res) => {
   try {
     const includeInactive = req.query.all === "true";
-    const services = await prisma.service.findMany({
-      where: includeInactive ? undefined : { isActive: true },
-      orderBy: { name: "asc" },
-    });
+    const services = await withDbTimeout(
+      prisma.service.findMany({
+        where: includeInactive ? undefined : { isActive: true },
+        orderBy: { name: "asc" },
+      }),
+      2000
+    );
     if (services && services.length > 0) {
       return res.json({ services });
     }

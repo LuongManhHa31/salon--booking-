@@ -3,6 +3,7 @@ import bcrypt from "bcryptjs";
 import { z } from "zod";
 import { prisma } from "../prisma";
 import { requireAuth, requireRole } from "../middleware/auth";
+import { withDbTimeout } from "../utils/dbTimeout";
 
 const router = Router();
 
@@ -17,11 +18,14 @@ const FALLBACK_STAFF = [
 // UC006 - Danh sách nhân viên khả dụng để khách hàng chọn khi đặt lịch (public, thông tin rút gọn)
 router.get("/", async (req, res) => {
   try {
-    const staff = await prisma.account.findMany({
-      where: { role: "STAFF", staffProfile: { active: true } },
-      select: { id: true, fullName: true, staffProfile: { select: { specialties: true } } },
-      orderBy: { fullName: "asc" },
-    });
+    const staff = await withDbTimeout(
+      prisma.account.findMany({
+        where: { role: "STAFF", staffProfile: { active: true } },
+        select: { id: true, fullName: true, staffProfile: { select: { specialties: true } } },
+        orderBy: { fullName: "asc" },
+      }),
+      2000
+    );
     if (staff && staff.length > 0) {
       return res.json({ staff });
     }
