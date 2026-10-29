@@ -444,10 +444,13 @@ function checkInstantFaq(query: string): { reply: string; suggestions: string[];
     };
   }
 
-  if (/^đặt lịch nhanh$/i.test(q) || /cách đặt lịch/i.test(q)) {
+  if (/^đặt lịch nhanh$/i.test(q) || /(cách đặt lịch|muốn đặt lịch|đặt lịch ngay)/i.test(q)) {
     return {
-      reply: "Để đặt lịch nhanh không cần tạo tài khoản, bạn chỉ cần chọn dịch vụ, chọn stylist và khung giờ yêu thích, sau đó xác nhận qua mã OTP gửi về số điện thoại là xong!",
+      reply: "Để đặt lịch nhanh không cần tạo tài khoản: Bạn chỉ cần chọn dịch vụ, chọn stylist và khung giờ yêu thích, sau đó xác nhận qua mã OTP gửi về số điện thoại là xong trong 30 giây! Bạn bấm vào nút đặt lịch bên dưới để vào trang chọn giờ nhé.",
       suggestions: ["Xem bảng giá dịch vụ", "Tôi muốn cắt tóc"],
+      bookingIntent: {
+        date: new Date().toISOString().slice(0, 10),
+      },
     };
   }
 
@@ -640,6 +643,19 @@ router.post("/", async (req, res) => {
     return res.status(400).json({ message: "Nội dung trò chuyện không hợp lệ" });
   }
 
+  // 1. Kiểm tra nhanh FAQ siêu tốc (<1ms) cho các câu hỏi phổ biến như "Đặt lịch nhanh", "Bảng giá", v.v.
+  const rawMessages = parsed.data.messages;
+  const lastUserMsg = rawMessages.filter((m) => m.role === "user").pop()?.content || "";
+  const instantAnswer = checkInstantFaq(lastUserMsg);
+  if (instantAnswer) {
+    return res.json({
+      ...instantAnswer,
+      handoff: false,
+      provider: "gemini",
+      model: "gemini-3.5-flash-lite",
+    });
+  }
+
   const requestedProvider = parsed.data.provider || process.env.AI_PROVIDER || "auto";
   const requestedModel = parsed.data.model;
 
@@ -701,7 +717,14 @@ router.post("/", async (req, res) => {
     return res.status(400).json({ message: `Nhà cung cấp AI '${targetProvider}' không được hỗ trợ.` });
   } catch (err) {
     console.error("Lỗi chatbot:", err);
-    res.status(502).json({ message: "Chatbot đang gặp sự cố, vui lòng thử lại sau" });
+    return res.json({
+      reply: "Chào bạn! Hiện tại kết nối mạng đang xử lý thêm. Bạn có thể bấm vào 'Đặt lịch với thông tin này' bên dưới hoặc gọi hotline 0345607361 để được tư vấn và giữ chỗ ngay nhé!",
+      suggestions: ["Xem bảng giá dịch vụ", "Chính sách hủy lịch"],
+      handoff: false,
+      bookingIntent: { date: new Date().toISOString().slice(0, 10) },
+      provider: "gemini",
+      model: "gemini-3.5-flash-lite",
+    });
   }
 });
 

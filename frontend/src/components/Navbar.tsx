@@ -24,18 +24,16 @@ export function Navbar() {
           <Link to="/quick-booking" className="hover:text-brand-600">
             Đặt lịch nhanh
           </Link>
+          <Link to="/my-appointments" className="hover:text-brand-600">
+            Lịch đã đặt
+          </Link>
           <Link to="/hairstyle-ai" className="hover:text-brand-600">
             Kiểu tóc AI
           </Link>
           {account?.role === "CUSTOMER" && (
-            <>
-              <Link to="/booking" className="hover:text-brand-600">
-                Đặt lịch
-              </Link>
-              <Link to="/my-appointments" className="hover:text-brand-600">
-                Lịch của tôi
-              </Link>
-            </>
+            <Link to="/booking" className="hover:text-brand-600">
+              Đặt lịch theo thợ
+            </Link>
           )}
           {account?.role === "STAFF" && (
             <Link to="/staff/schedule" className="hover:text-brand-600">

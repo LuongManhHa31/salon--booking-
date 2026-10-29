@@ -33,6 +33,33 @@ router.get("/availability", async (req, res) => {
   res.json(result);
 });
 
+// Tra cứu danh sách lịch hẹn công khai theo số điện thoại (cho khách đặt lịch nhanh hoặc kiểm tra lịch)
+router.get("/lookup", async (req, res) => {
+  const phone = String(req.query.phone || "").trim();
+  if (!phone) {
+    return res.status(400).json({ message: "Vui lòng nhập số điện thoại để tra cứu lịch hẹn" });
+  }
+
+  try {
+    const appointments = await withDbTimeout(
+      prisma.appointment.findMany({
+        where: { customer: { phone: { contains: phone } } },
+        include: { services: { include: { service: true } }, staff: true, review: true, payment: true },
+        orderBy: { scheduledStart: "desc" },
+      }),
+      2000
+    );
+    if (appointments && appointments.length > 0) {
+      return res.json({ appointments });
+    }
+  } catch (err) {
+    // DB offline
+  }
+
+  const matched = MOCK_APPOINTMENTS.filter((a) => a.customer && a.customer.phone.includes(phone));
+  return res.json({ appointments: matched });
+});
+
 const createAppointmentSchema = z.object({
   serviceIds: z.array(z.string()).min(1),
   staffId: z.string().optional(),

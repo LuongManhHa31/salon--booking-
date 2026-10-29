@@ -41,14 +41,7 @@ export default function App() {
               </ProtectedRoute>
             }
           />
-          <Route
-            path="/my-appointments"
-            element={
-              <ProtectedRoute roles={["CUSTOMER"]}>
-                <MyAppointmentsPage />
-              </ProtectedRoute>
-            }
-          />
+          <Route path="/my-appointments" element={<MyAppointmentsPage />} />
           <Route
             path="/profile"
             element={
